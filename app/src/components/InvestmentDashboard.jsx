@@ -35,7 +35,7 @@ export default function InvestmentDashboard() {
           
           if (tx.shares > 0) { // Buy
              holdingMap[tx.ticker].shares += tx.shares;
-             holdingMap[tx.ticker].costBasis += (tx.price_per_share || 0) * tx.shares + (tx.commission || 0);
+             holdingMap[tx.ticker].costBasis += (tx.price_per_share || 0) * tx.shares + (tx.fee || 0);
           } else { // Sell
              const currentShares = holdingMap[tx.ticker].shares;
              const currentCost = holdingMap[tx.ticker].costBasis;

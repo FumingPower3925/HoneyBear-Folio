@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import ImportModal from './ImportModal';
+import ExportModal from './ExportModal';
 import { 
   Wallet, 
   Plus, 
@@ -11,13 +13,18 @@ import {
   List,
   PieChart,
   Calculator,
-  Download
+  Download,
+  Upload,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 
 export default function Sidebar({ onSelectAccount, refreshTrigger }) {
   const [accounts, setAccounts] = useState([]);
   const [marketValues, setMarketValues] = useState({});
   const [isAdding, setIsAdding] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [newAccountName, setNewAccountName] = useState('');
   const [newAccountBalance, setNewAccountBalance] = useState('');
   const [newAccountType, setNewAccountType] = useState('cash');
@@ -93,32 +100,6 @@ export default function Sidebar({ onSelectAccount, refreshTrigger }) {
 
     } catch (e) {
       console.error("Failed to fetch market values:", e);
-    }
-  }
-
-  async function handleExport() {
-    try {
-      const accounts = await invoke('get_accounts');
-      const transactions = await invoke('get_all_transactions');
-      
-      const data = {
-        accounts,
-        transactions,
-        exportDate: new Date().toISOString()
-      };
-      
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `honeybear_export_${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-    } catch (e) {
-      console.error("Export failed:", e);
     }
   }
 
@@ -344,17 +325,43 @@ export default function Sidebar({ onSelectAccount, refreshTrigger }) {
       
       {/* Footer */}
       <div className="p-4 border-t border-slate-800">
-        <button 
-          onClick={handleExport}
-          className="w-full flex items-center justify-center gap-2 text-slate-500 hover:text-slate-300 hover:bg-slate-800 py-2 rounded transition-colors mb-2"
-        >
-          <Download className="w-4 h-4" />
-          <span className="text-xs font-medium">Export Data</span>
-        </button>
+        <div className="flex gap-2 mb-2">
+          <button 
+            onClick={() => setShowImportModal(true)}
+            className="flex-1 flex items-center justify-center gap-2 text-slate-500 hover:text-slate-300 hover:bg-slate-800 py-2 rounded transition-colors"
+          >
+            <Upload className="w-4 h-4" />
+            <span className="text-xs font-medium">Import</span>
+          </button>
+          <button 
+            onClick={() => setShowExportModal(true)}
+            className="flex-1 flex items-center justify-center gap-2 text-slate-500 hover:text-slate-300 hover:bg-slate-800 py-2 rounded transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            <span className="text-xs font-medium">Export</span>
+          </button>
+        </div>
         <div className="text-xs text-slate-600 text-center">
           v0.1.0 • HoneyBear
         </div>
       </div>
+      
+      {showImportModal && (
+        <ImportModal 
+          onClose={() => setShowImportModal(false)} 
+          onImportComplete={() => {
+            fetchAccounts();
+            fetchMarketValues();
+          }} 
+        />
+      )}
+
+      {showExportModal && (
+        <ExportModal 
+          onClose={() => setShowExportModal(false)} 
+        />
+      )}
     </div>
   );
 }
+
