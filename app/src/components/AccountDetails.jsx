@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 export default function AccountDetails({ account, onUpdate }) {
   const [transactions, setTransactions] = useState([]);
   const [isAdding, setIsAdding] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Editing state
   const [editingId, setEditingId] = useState(null);
@@ -125,6 +126,18 @@ export default function AccountDetails({ account, onUpdate }) {
     }
   }
 
+  const filteredTransactions = transactions.filter(tx => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      tx.date.toLowerCase().includes(query) ||
+      tx.payee.toLowerCase().includes(query) ||
+      (tx.category && tx.category.toLowerCase().includes(query)) ||
+      (tx.notes && tx.notes.toLowerCase().includes(query)) ||
+      tx.amount.toString().includes(query)
+    );
+  });
+
   return (
     <div>
       <header className="mb-8 border-b border-gray-200 pb-4 flex justify-between items-end">
@@ -136,12 +149,21 @@ export default function AccountDetails({ account, onUpdate }) {
             </span>
           </p>
         </div>
-        <button 
-          onClick={() => setIsAdding(!isAdding)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition-colors"
-        >
-          {isAdding ? 'Cancel' : 'Add Transaction'}
-        </button>
+        <div className="flex gap-3">
+          <input 
+            type="text" 
+            placeholder="Search..." 
+            className="px-3 py-2 border border-gray-300 rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm w-64"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+          <button 
+            onClick={() => setIsAdding(!isAdding)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition-colors"
+          >
+            {isAdding ? 'Cancel' : 'Add Transaction'}
+          </button>
+        </div>
       </header>
 
       {isAdding && (
@@ -226,14 +248,14 @@ export default function AccountDetails({ account, onUpdate }) {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {transactions.length === 0 ? (
+            {filteredTransactions.length === 0 ? (
               <tr>
                 <td colSpan="6" className="px-6 py-10 text-center text-gray-500 italic">
-                  No transactions found. Add one to get started!
+                  {searchQuery ? 'No transactions match your search.' : 'No transactions found. Add one to get started!'}
                 </td>
               </tr>
             ) : (
-              transactions.map((tx) => (
+              filteredTransactions.map((tx) => (
                 <tr key={tx.id} className="hover:bg-blue-50 group relative">
                   {editingId === tx.id ? (
                     <>
