@@ -38,7 +38,7 @@ jobs:
           echo "Updating version to $TAG_VERSION"
           
           cd app
-          npm version $TAG_VERSION --no-git-tag-version
+          npm version $TAG_VERSION --no-git-tag-version --allow-same-version
           npm run version:sync
         shell: bash
 
