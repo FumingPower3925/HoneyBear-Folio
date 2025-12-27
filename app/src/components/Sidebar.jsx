@@ -14,11 +14,14 @@ export default function Sidebar({ onSelectAccount }) {
   async function fetchAccounts() {
     try {
       const accs = await invoke('get_accounts');
+      accs.sort((a, b) => b.balance - a.balance);
       setAccounts(accs);
     } catch (e) {
       console.error("Failed to fetch accounts:", e);
     }
   }
+
+  const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
 
   async function handleAddAccount(e) {
     e.preventDefault();
@@ -38,7 +41,11 @@ export default function Sidebar({ onSelectAccount }) {
 
   return (
     <div className="w-64 bg-gray-900 text-white h-screen flex flex-col p-4 border-r border-gray-800">
-      <h1 className="text-xl font-bold mb-6 text-blue-400">HoneyBear Folio</h1>
+      <h1 className="text-xl font-bold mb-2 text-blue-400">HoneyBear Folio</h1>
+      <div className="mb-6">
+        <div className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Net Worth</div>
+        <div className="text-2xl font-bold text-white">${totalBalance.toFixed(2)}</div>
+      </div>
       
       <div className="flex-1 overflow-y-auto">
         <h2 className="text-gray-400 uppercase text-xs font-semibold mb-2 tracking-wider">Accounts</h2>
