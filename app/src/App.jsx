@@ -1,51 +1,46 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
+import Sidebar from "./components/Sidebar";
+import AccountDetails from "./components/AccountDetails";
+import { Wallet } from "lucide-react";
 import "./App.css";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [selectedAccount, setSelectedAccount] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  const handleAccountUpdate = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    <div className="flex h-screen bg-slate-50 text-slate-900 font-sans">
+      <Sidebar 
+        onSelectAccount={setSelectedAccount} 
+        refreshTrigger={refreshTrigger}
+      />
+      
+      <main className="flex-1 p-8 overflow-y-auto">
+        {selectedAccount ? (
+          <AccountDetails 
+            key={selectedAccount.id} 
+            account={selectedAccount} 
+            onUpdate={handleAccountUpdate}
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-slate-400">
+            <div className="bg-white p-8 rounded-full shadow-lg mb-6 animate-bounce">
+              <Wallet className="w-16 h-16 text-blue-500" />
+            </div>
+            <h2 className="text-3xl font-bold mb-3 text-slate-700">Welcome to HoneyBear Folio</h2>
+            <p className="text-lg text-slate-500 max-w-md text-center">
+              Select an account from the sidebar to view details, or create a new one to get started.
+            </p>
+          </div>
+        )}
+      </main>
+    </div>
   );
 }
 
 export default App;
+

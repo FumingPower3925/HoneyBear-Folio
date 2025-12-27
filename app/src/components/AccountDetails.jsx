@@ -1,0 +1,560 @@
+import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { 
+  Search, 
+  Plus, 
+  MoreVertical, 
+  Copy, 
+  Trash2, 
+  Check, 
+  X, 
+  Calendar, 
+  Tag, 
+  FileText, 
+  Euro,
+  ArrowRightLeft,
+  User
+} from 'lucide-react';
+
+export default function AccountDetails({ account, onUpdate }) {
+  const [transactions, setTransactions] = useState([]);
+  const [isAdding, setIsAdding] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [payeeSuggestions, setPayeeSuggestions] = useState([]);
+  const [categorySuggestions, setCategorySuggestions] = useState([]);
+  const [availableAccounts, setAvailableAccounts] = useState([]);
+  
+  // Editing state
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [menuOpenId, setMenuOpenId] = useState(null);
+
+  // Form state
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [payee, setPayee] = useState('');
+  const [category, setCategory] = useState('');
+  const [notes, setNotes] = useState('');
+  const [amount, setAmount] = useState('');
+
+  useEffect(() => {
+    if (account) {
+      fetchTransactions();
+      fetchSuggestions();
+    }
+  }, [account]);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (menuOpenId && !event.target.closest('.action-menu-container')) {
+        setMenuOpenId(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpenId]);
+
+  // Auto-set category to Transfer if payee is an account
+  useEffect(() => {
+    if (availableAccounts.includes(payee)) {
+      setCategory('Transfer');
+    }
+  }, [payee, availableAccounts]);
+
+  useEffect(() => {
+    if (editForm.payee && availableAccounts.includes(editForm.payee)) {
+      setEditForm(prev => ({ ...prev, category: 'Transfer' }));
+    }
+  }, [editForm.payee, availableAccounts]);
+
+  async function fetchSuggestions() {
+    try {
+      const [payees, accounts, categories] = await Promise.all([
+        invoke('get_payees'),
+        invoke('get_accounts'),
+        invoke('get_categories')
+      ]);
+      
+      // Filter out current account from accounts list
+      const otherAccounts = accounts
+        .filter(a => a.id !== account.id)
+        .map(a => a.name);
+      
+      setAvailableAccounts(otherAccounts);
+
+      const accountOptions = otherAccounts.map(name => ({ value: name, label: 'Account', type: 'account' }));
+      const payeeOptions = payees.map(name => ({ value: name, label: 'Payee', type: 'payee' }));
+      
+      const combined = [...accountOptions, ...payeeOptions].sort((a, b) => a.value.localeCompare(b.value));
+      
+      const unique = [];
+      const seen = new Set();
+      for (const item of combined) {
+        if (!seen.has(item.value)) {
+          seen.add(item.value);
+          unique.push(item);
+        } else if (item.type === 'account') {
+          const index = unique.findIndex(u => u.value === item.value);
+          if (index !== -1) unique[index] = item;
+        }
+      }
+      
+      setPayeeSuggestions(unique);
+      setCategorySuggestions(categories);
+    } catch (e) {
+      console.error("Failed to fetch suggestions:", e);
+    }
+  }
+
+  async function fetchTransactions() {
+    try {
+      let txs;
+      if (account.id === 'all') {
+        txs = await invoke('get_all_transactions');
+      } else {
+        txs = await invoke('get_transactions', { accountId: account.id });
+      }
+      setTransactions(txs);
+    } catch (e) {
+      console.error("Failed to fetch transactions:", e);
+    }
+  }
+
+  async function handleAddTransaction(e) {
+    e.preventDefault();
+    try {
+      await invoke('create_transaction', {
+        accountId: account.id,
+        date,
+        payee,
+        category: category || null,
+        notes: notes || null,
+        amount: parseFloat(amount) || 0.0
+      });
+      
+      setPayee('');
+      setCategory('');
+      setNotes('');
+      setAmount('');
+      setIsAdding(false);
+      
+      fetchTransactions();
+      fetchSuggestions();
+      if (onUpdate) onUpdate(); 
+    } catch (e) {
+      console.error("Failed to create transaction:", e);
+    }
+  }
+
+  function startEditing(tx) {
+    setEditingId(tx.id);
+    setEditForm({ ...tx });
+    setMenuOpenId(null);
+  }
+
+  async function saveEdit() {
+    try {
+      await invoke('update_transaction', {
+        id: editForm.id,
+        accountId: editForm.account_id,
+        date: editForm.date,
+        payee: editForm.payee,
+        category: editForm.category || null,
+        notes: editForm.notes || null,
+        amount: parseFloat(editForm.amount) || 0.0
+      });
+      setEditingId(null);
+      fetchTransactions();
+      if (onUpdate) onUpdate();
+    } catch (e) {
+      console.error("Failed to update transaction:", e);
+    }
+  }
+
+  async function deleteTransaction(id) {
+    if (!confirm("Are you sure you want to delete this transaction?")) return;
+    try {
+      await invoke('delete_transaction', { id });
+      setMenuOpenId(null);
+      fetchTransactions();
+      if (onUpdate) onUpdate();
+    } catch (e) {
+      console.error("Failed to delete transaction:", e);
+    }
+  }
+
+  async function duplicateTransaction(tx) {
+    try {
+      await invoke('create_transaction', {
+        accountId: tx.account_id,
+        date: tx.date,
+        payee: tx.payee,
+        category: tx.category,
+        notes: tx.notes,
+        amount: tx.amount
+      });
+      setMenuOpenId(null);
+      fetchTransactions();
+      if (onUpdate) onUpdate();
+    } catch (e) {
+      console.error("Failed to duplicate transaction:", e);
+    }
+  }
+
+  const filteredTransactions = transactions.filter(tx => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      tx.date.toLowerCase().includes(query) ||
+      tx.payee.toLowerCase().includes(query) ||
+      (tx.category && tx.category.toLowerCase().includes(query)) ||
+      (tx.notes && tx.notes.toLowerCase().includes(query)) ||
+      tx.amount.toString().includes(query)
+    );
+  });
+
+  return (
+    <div className="max-w-6xl mx-auto">
+      {/* Header */}
+      <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">{account.name}</h1>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-slate-500 font-medium">Balance:</span>
+            <span className={`text-2xl font-bold tracking-tight ${account.balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              €{account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+        </div>
+        
+        <div className="flex gap-3 w-full md:w-auto">
+          <div className="relative flex-1 md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Search transactions..." 
+              className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+          </div>
+          {account.id !== 'all' && (
+            <button 
+              onClick={() => setIsAdding(!isAdding)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-sm font-medium text-sm transition-all ${
+                isAdding 
+                  ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200' 
+                  : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md'
+              }`}
+            >
+              {isAdding ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {isAdding ? 'Cancel' : 'Add Transaction'}
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* Add Transaction Form */}
+      {isAdding && (
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-lg mb-8 animate-in slide-in-from-top-4 duration-300">
+          <h3 className="text-lg font-semibold mb-4 text-slate-800 flex items-center gap-2">
+            <div className="bg-blue-100 p-1.5 rounded-md">
+              <Plus className="w-4 h-4 text-blue-600" />
+            </div>
+            New Transaction
+          </h3>
+          <form onSubmit={handleAddTransaction} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+            <div className="md:col-span-2">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Date</label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input 
+                  type="date" 
+                  required
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  value={date}
+                  onChange={e => setDate(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div className="md:col-span-3">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Payee</label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
+                <AutocompleteInput 
+                  suggestions={payeeSuggestions}
+                  placeholder="Who got paid?"
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  value={payee}
+                  onChange={setPayee}
+                />
+              </div>
+            </div>
+            
+            <div className="md:col-span-2">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Category</label>
+              <div className="relative">
+                <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input 
+                  type="text" 
+                  list="category-suggestions"
+                  placeholder="Category"
+                  className={`w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${availableAccounts.includes(payee) ? 'bg-slate-50 text-slate-500' : ''}`}
+                  value={category}
+                  onChange={e => setCategory(e.target.value)}
+                  disabled={availableAccounts.includes(payee)}
+                />
+              </div>
+            </div>
+            
+            <div className="md:col-span-3">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Notes</label>
+              <div className="relative">
+                <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="What was this for?"
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div className="md:col-span-2">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Amount</label>
+              <div className="relative">
+                <Euro className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input 
+                  type="number" 
+                  required
+                  step="0.01"
+                  placeholder="0.00"
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium"
+                  value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div className="md:col-span-12 flex justify-end mt-2">
+              <button 
+                type="submit" 
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 text-sm font-medium rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-2"
+              >
+                <Check className="w-4 h-4" />
+                Save Transaction
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+      
+      {/* Transactions Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-32">Date</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Payee</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-48">Category</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Notes</th>
+                <th className="px-6 py-4 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider w-36">Amount</th>
+                <th className="w-16"></th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-slate-100">
+              {filteredTransactions.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="px-6 py-16 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="bg-slate-100 p-4 rounded-full">
+                        <Search className="w-8 h-8 text-slate-300" />
+                      </div>
+                      <p className="text-lg font-medium text-slate-600">No transactions found</p>
+                      <p className="text-sm text-slate-400">
+                        {searchQuery ? 'Try adjusting your search terms.' : 'Add a new transaction to get started.'}
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredTransactions.map((tx) => (
+                  <tr key={tx.id} className="hover:bg-slate-50 group transition-colors">
+                    {editingId === tx.id ? (
+                      <>
+                        <td className="px-4 py-3">
+                          <input 
+                            type="date" 
+                            className="w-full p-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={editForm.date}
+                            onChange={e => setEditForm({...editForm, date: e.target.value})}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <AutocompleteInput 
+                            suggestions={payeeSuggestions}
+                            className="w-full p-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={editForm.payee}
+                            onChange={val => setEditForm({...editForm, payee: val})}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <input 
+                            type="text" 
+                            list="category-suggestions"
+                            className={`w-full p-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none ${availableAccounts.includes(editForm.payee) ? 'bg-slate-100 text-slate-500' : ''}`}
+                            value={editForm.category || ''}
+                            onChange={e => setEditForm({...editForm, category: e.target.value})}
+                            disabled={availableAccounts.includes(editForm.payee)}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <input 
+                            type="text" 
+                            className="w-full p-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={editForm.notes || ''}
+                            onChange={e => setEditForm({...editForm, notes: e.target.value})}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <input 
+                            type="number" 
+                            step="0.01"
+                            className="w-full p-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-right"
+                            value={editForm.amount}
+                            onChange={e => setEditForm({...editForm, amount: e.target.value})}
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button onClick={saveEdit} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"><Check className="w-4 h-4" /></button>
+                            <button onClick={() => setEditingId(null)} className="p-1 text-rose-600 hover:bg-rose-50 rounded"><X className="w-4 h-4" /></button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 cursor-pointer" onClick={() => startEditing(tx)}>
+                          {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900 cursor-pointer" onClick={() => startEditing(tx)}>
+                          {tx.payee}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm cursor-pointer" onClick={() => startEditing(tx)}>
+                          {tx.category ? (
+                            <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-medium rounded-full ${
+                              tx.category === 'Transfer' 
+                                ? 'bg-purple-100 text-purple-800 border border-purple-200' 
+                                : 'bg-blue-50 text-blue-700 border border-blue-100'
+                            }`}>
+                              {tx.category}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-500 max-w-xs truncate cursor-pointer" onClick={() => startEditing(tx)}>
+                          {tx.notes || <span className="text-slate-300 italic">No notes</span>}
+                        </td>
+                        <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-bold cursor-pointer ${tx.amount >= 0 ? 'text-emerald-600' : 'text-rose-600'}`} onClick={() => startEditing(tx)}>
+                          {tx.amount >= 0 ? '+' : ''}{tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium relative action-menu-container">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuOpenId(menuOpenId === tx.id ? null : tx.id);
+                            }}
+                            className={`p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all ${menuOpenId === tx.id ? 'opacity-100 bg-slate-100' : 'opacity-0 group-hover:opacity-100'}`}
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                          
+                          {menuOpenId === tx.id && (
+                            <div className="absolute right-8 top-8 w-40 bg-white rounded-lg shadow-xl z-20 border border-slate-100 py-1 animate-in fade-in zoom-in-95 duration-100">
+                              <button 
+                                onClick={() => duplicateTransaction(tx)}
+                                className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                              >
+                                <Copy className="w-4 h-4 text-slate-400" />
+                                Duplicate
+                              </button>
+                              <button 
+                                onClick={() => deleteTransaction(tx.id)}
+                                className="w-full text-left px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <datalist id="category-suggestions">
+        {categorySuggestions.map((cat, index) => (
+          <option key={index} value={cat} />
+        ))}
+      </datalist>
+    </div>
+  );
+}
+
+function AutocompleteInput({ value, onChange, suggestions, placeholder, className, disabled }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [filtered, setFiltered] = useState([]);
+
+  useEffect(() => {
+    if (!value) {
+      setFiltered(suggestions);
+    } else {
+      const query = value.toLowerCase();
+      setFiltered(suggestions.filter(s => s.value.toLowerCase().includes(query)));
+    }
+  }, [value, suggestions]);
+
+  return (
+    <div className="relative w-full">
+      <input 
+        type="text"
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setIsOpen(true); }}
+        onFocus={() => setIsOpen(true)}
+        onBlur={() => setTimeout(() => setIsOpen(false), 200)}
+        className={className}
+        placeholder={placeholder}
+        disabled={disabled}
+      />
+      {isOpen && filtered.length > 0 && (
+        <ul className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-auto text-left py-1">
+          {filtered.map((s, i) => (
+            <li 
+              key={i}
+              className="px-3 py-2 hover:bg-blue-50 cursor-pointer flex justify-between items-center text-sm text-slate-700"
+              onMouseDown={(e) => { e.preventDefault(); onChange(s.value); setIsOpen(false); }}
+            >
+              <span className="font-medium">{s.value}</span>
+              {s.type === 'account' && (
+                <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full border border-purple-200 flex items-center gap-1">
+                  <ArrowRightLeft className="w-3 h-3" />
+                  Transfer
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
