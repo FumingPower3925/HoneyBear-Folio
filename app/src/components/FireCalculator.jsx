@@ -263,84 +263,86 @@ export default function FireCalculator() {
   };
 
   return (
-    <div className="h-full flex flex-col space-y-6 max-w-7xl mx-auto">
+    <div className="h-full flex flex-col space-y-8 max-w-7xl mx-auto pb-8">
       <header className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-2">
-            <Calculator className="w-8 h-8 text-blue-600" />
+          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3 tracking-tight">
+            <div className="bg-brand-100 p-2 rounded-xl">
+              <Calculator className="w-8 h-8 text-brand-600" />
+            </div>
             FIRE Calculator
           </h1>
-          <p className="text-slate-500 mt-1">Financial Independence, Retire Early</p>
+          <p className="text-slate-500 font-medium mt-1 ml-14">Financial Independence, Retire Early</p>
         </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Inputs */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-6">
-          <h2 className="text-xl font-semibold text-slate-700 mb-4">Parameters</h2>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6 h-fit">
+          <h2 className="text-xl font-bold text-slate-900 mb-4">Parameters</h2>
           
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Current Net Worth</label>
+              <label className="block text-sm font-bold text-slate-700 mb-1.5">Current Net Worth</label>
               <div className="relative">
                 <Euro className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input 
                   type="number" 
                   value={currentNetWorth} 
                   onChange={(e) => setCurrentNetWorth(Number(e.target.value))}
-                  className="w-full pl-4 pr-9 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  className="w-full pl-4 pr-9 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all font-medium text-slate-900"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Annual Expenses</label>
+              <label className="block text-sm font-bold text-slate-700 mb-1.5">Annual Expenses</label>
               <div className="relative">
                 <Euro className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input 
                   type="number" 
                   value={annualExpenses} 
                   onChange={(e) => setAnnualExpenses(Number(e.target.value))}
-                  className="w-full pl-4 pr-9 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  className="w-full pl-4 pr-9 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all font-medium text-slate-900"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Annual Savings</label>
+              <label className="block text-sm font-bold text-slate-700 mb-1.5">Annual Savings</label>
               <div className="relative">
                 <Euro className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input 
                   type="number" 
                   value={annualSavings} 
                   onChange={(e) => setAnnualSavings(Number(e.target.value))}
-                  className="w-full pl-4 pr-9 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  className="w-full pl-4 pr-9 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all font-medium text-slate-900"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Expected Annual Return (%)</label>
+              <label className="block text-sm font-bold text-slate-700 mb-1.5">Expected Annual Return (%)</label>
               <div className="relative">
                 <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input 
                   type="number" 
                   value={expectedReturn} 
                   onChange={(e) => setExpectedReturn(Number(e.target.value))}
-                  className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all font-medium text-slate-900"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Safe Withdrawal Rate (%)</label>
+              <label className="block text-sm font-bold text-slate-700 mb-1.5">Safe Withdrawal Rate (%)</label>
               <div className="relative">
                 <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input 
                   type="number" 
                   value={withdrawalRate} 
                   onChange={(e) => setWithdrawalRate(Number(e.target.value))}
-                  className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all font-medium text-slate-900"
                 />
               </div>
             </div>

@@ -295,14 +295,14 @@ export default function AccountDetails({ account, onUpdate }) {
   });
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-6xl mx-auto pb-8">
       {/* Header */}
-      <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">{account.name}</h1>
           <div className="flex items-baseline gap-2 mt-1">
             <span className="text-slate-500 font-medium">Balance:</span>
-            <span className={`text-2xl font-bold tracking-tight ${account.balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            <span className={`text-2xl font-bold tracking-tight ${account.balance >= 0 ? 'text-slate-900' : 'text-rose-600'}`}>
               {account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
             </span>
           </div>
@@ -314,7 +314,7 @@ export default function AccountDetails({ account, onUpdate }) {
             <input 
               type="text" 
               placeholder="Search transactions..." 
-              className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
+              className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm transition-all"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
@@ -322,10 +322,10 @@ export default function AccountDetails({ account, onUpdate }) {
           {account.id !== 'all' && (
             <button 
               onClick={() => setIsAdding(!isAdding)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-sm font-medium text-sm transition-all ${
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-sm font-medium text-sm transition-all ${
                 isAdding 
                   ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200' 
-                  : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md'
+                  : 'bg-brand-600 text-white hover:bg-brand-700 hover:shadow-md shadow-brand-900/20'
               }`}
             >
               {isAdding ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
@@ -337,10 +337,10 @@ export default function AccountDetails({ account, onUpdate }) {
 
       {/* Add Transaction Form */}
       {isAdding && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-lg mb-8 animate-in slide-in-from-top-4 duration-300">
-          <h3 className="text-lg font-semibold mb-4 text-slate-800 flex items-center gap-2">
-            <div className="bg-blue-100 p-1.5 rounded-md">
-              <Plus className="w-4 h-4 text-blue-600" />
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-lg mb-8 animate-in slide-in-from-top-4 duration-300">
+          <h3 className="text-lg font-bold mb-6 text-slate-900 flex items-center gap-2">
+            <div className="bg-brand-100 p-2 rounded-lg">
+              <Plus className="w-4 h-4 text-brand-600" />
             </div>
             New Transaction
           </h3>
@@ -595,16 +595,16 @@ export default function AccountDetails({ account, onUpdate }) {
       )}
       
       {/* Transactions Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50">
+            <thead className="bg-slate-50/50">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-32">Date</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Payee</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-48">Category</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Notes</th>
-                <th className="px-6 py-4 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider w-36">Amount</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-32">Date</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Payee</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-48">Category</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Notes</th>
+                <th className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider w-36">Amount</th>
                 <th className="w-16"></th>
               </tr>
             </thead>
@@ -688,10 +688,10 @@ export default function AccountDetails({ account, onUpdate }) {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm cursor-pointer" onClick={() => startEditing(tx)}>
                           {tx.category ? (
-                            <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-medium rounded-full ${
+                            <span className={`px-3 py-1 inline-flex text-xs font-semibold rounded-md border ${
                               tx.category === 'Transfer' 
-                                ? 'bg-purple-100 text-purple-800 border border-purple-200' 
-                                : 'bg-blue-50 text-blue-700 border border-blue-100'
+                                ? 'bg-purple-50 text-purple-700 border-purple-200' 
+                                : 'bg-slate-100 text-slate-700 border-slate-200'
                             }`}>
                               {tx.category}
                             </span>

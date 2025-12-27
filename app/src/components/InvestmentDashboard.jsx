@@ -144,15 +144,15 @@ export default function InvestmentDashboard() {
   };
 
   return (
-    <div className="h-full flex flex-col space-y-6 max-w-7xl mx-auto">
+    <div className="h-full flex flex-col space-y-8 max-w-7xl mx-auto pb-8">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Investment Dashboard</h2>
-          <p className="text-slate-500 text-sm">Track your portfolio performance</p>
+          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Investment Dashboard</h2>
+          <p className="text-slate-500 font-medium mt-1">Track your portfolio performance</p>
         </div>
         <button 
           onClick={fetchData} 
-          className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all duration-200"
+          className="p-2.5 text-slate-500 hover:text-brand-600 hover:bg-brand-50 rounded-xl transition-all duration-200 shadow-sm border border-transparent hover:border-brand-100"
           title="Refresh Data"
         >
           <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
@@ -162,40 +162,40 @@ export default function InvestmentDashboard() {
       {loading ? (
         <div className="flex-1 flex items-center justify-center text-slate-400">
           <div className="flex flex-col items-center gap-3">
-            <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
-            <span>Loading investment data...</span>
+            <RefreshCw className="w-8 h-8 animate-spin text-brand-500" />
+            <span className="font-medium">Loading investment data...</span>
           </div>
         </div>
       ) : error ? (
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg border border-red-100">
+        <div className="bg-rose-50 text-rose-600 p-4 rounded-xl border border-rose-100 font-medium">
           Error: {error}
         </div>
       ) : holdings.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
+        <div className="flex-1 flex flex-col items-center justify-center text-slate-400 font-medium">
           <p>No investments found.</p>
         </div>
       ) : (
         <>
           {/* Summary Card */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-center transition-transform hover:scale-[1.02] duration-200">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Total Portfolio Value</h3>
-                <p className="text-3xl font-bold text-slate-900">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center transition-all duration-200 hover:shadow-md hover:border-brand-100 group">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 group-hover:text-brand-500 transition-colors">Total Portfolio Value</h3>
+                <p className="text-3xl font-bold text-slate-900 tracking-tight">
                     {totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                 </p>
             </div>
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-center transition-transform hover:scale-[1.02] duration-200">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Top Performer</h3>
-                <p className="text-xl font-bold text-green-600 truncate">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center transition-all duration-200 hover:shadow-md hover:border-brand-100 group">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 group-hover:text-brand-500 transition-colors">Top Performer</h3>
+                <p className="text-xl font-bold text-emerald-600 truncate tracking-tight">
                     {holdings.reduce((prev, current) => (prev.roi > current.roi) ? prev : current).ticker}
                     <span className="text-sm font-medium ml-2 text-slate-500">
                       ({holdings.reduce((prev, current) => (prev.roi > current.roi) ? prev : current).roi.toFixed(2)}%)
                     </span>
                 </p>
             </div>
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-center transition-transform hover:scale-[1.02] duration-200">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Total Holdings</h3>
-                <p className="text-3xl font-bold text-slate-900">{holdings.length}</p>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center transition-all duration-200 hover:shadow-md hover:border-brand-100 group">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 group-hover:text-brand-500 transition-colors">Total Holdings</h3>
+                <p className="text-3xl font-bold text-slate-900 tracking-tight">{holdings.length}</p>
             </div>
           </div>
 
