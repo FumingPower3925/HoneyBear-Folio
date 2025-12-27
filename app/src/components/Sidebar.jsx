@@ -72,7 +72,7 @@ export default function Sidebar({ onSelectAccount, refreshTrigger }) {
             Net Worth
           </div>
           <div className="text-2xl font-bold text-white tracking-tight">
-            ${totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            €{totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
         </div>
       </div>
@@ -159,7 +159,7 @@ export default function Sidebar({ onSelectAccount, refreshTrigger }) {
                     <span className="font-medium truncate">{account.name}</span>
                   </div>
                   <span className={`text-sm font-medium ${selectedId === account.id ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}`}>
-                    ${account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    €{account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </button>
               </li>

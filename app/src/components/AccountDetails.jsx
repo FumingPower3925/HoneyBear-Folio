@@ -11,7 +11,7 @@ import {
   Calendar, 
   Tag, 
   FileText, 
-  DollarSign,
+  Euro,
   ArrowRightLeft,
   User
 } from 'lucide-react';
@@ -222,7 +222,7 @@ export default function AccountDetails({ account, onUpdate }) {
           <div className="flex items-baseline gap-2 mt-1">
             <span className="text-slate-500 font-medium">Balance:</span>
             <span className={`text-2xl font-bold tracking-tight ${account.balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              ${account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              €{account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
         </div>
@@ -325,7 +325,7 @@ export default function AccountDetails({ account, onUpdate }) {
             <div className="md:col-span-2">
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Amount</label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Euro className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input 
                   type="number" 
                   required
