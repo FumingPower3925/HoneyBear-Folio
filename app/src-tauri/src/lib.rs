@@ -168,6 +168,84 @@ fn get_transactions(app_handle: AppHandle, account_id: i32) -> Result<Vec<Transa
 }
 
 #[tauri::command]
+fn update_transaction(
+    app_handle: AppHandle,
+    id: i32,
+    account_id: i32,
+    date: String,
+    payee: String,
+    notes: Option<String>,
+    category: Option<String>,
+    amount: f64
+) -> Result<Transaction, String> {
+    let db_path = get_db_path(&app_handle)?;
+    let mut conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+    
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    // Get old amount
+    let old_amount: f64 = tx.query_row(
+        "SELECT amount FROM transactions WHERE id = ?1",
+        params![id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+
+    tx.execute(
+        "UPDATE transactions SET date = ?1, payee = ?2, notes = ?3, category = ?4, amount = ?5 WHERE id = ?6",
+        params![date, payee, notes, category, amount, id],
+    ).map_err(|e| e.to_string())?;
+
+    let diff = amount - old_amount;
+    if diff.abs() > f64::EPSILON {
+        tx.execute(
+            "UPDATE accounts SET balance = balance + ?1 WHERE id = ?2",
+            params![diff, account_id],
+        ).map_err(|e| e.to_string())?;
+    }
+
+    tx.commit().map_err(|e| e.to_string())?;
+    
+    Ok(Transaction {
+        id,
+        account_id,
+        date,
+        payee,
+        notes,
+        category,
+        amount,
+    })
+}
+
+#[tauri::command]
+fn delete_transaction(app_handle: AppHandle, id: i32) -> Result<(), String> {
+    let db_path = get_db_path(&app_handle)?;
+    let mut conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+    
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    // Get amount and account_id
+    let (amount, account_id): (f64, i32) = tx.query_row(
+        "SELECT amount, account_id FROM transactions WHERE id = ?1",
+        params![id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).map_err(|e| e.to_string())?;
+
+    tx.execute(
+        "DELETE FROM transactions WHERE id = ?1",
+        params![id],
+    ).map_err(|e| e.to_string())?;
+
+    tx.execute(
+        "UPDATE accounts SET balance = balance - ?1 WHERE id = ?2",
+        params![amount, account_id],
+    ).map_err(|e| e.to_string())?;
+
+    tx.commit().map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+#[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
@@ -180,7 +258,15 @@ pub fn run() {
             init_db(app.handle())?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, create_account, get_accounts, create_transaction, get_transactions])
+        .invoke_handler(tauri::generate_handler![
+            greet, 
+            create_account, 
+            get_accounts, 
+            create_transaction, 
+            get_transactions,
+            update_transaction,
+            delete_transaction
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
