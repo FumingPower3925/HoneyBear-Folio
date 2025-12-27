@@ -5,6 +5,7 @@ export default function AccountDetails({ account, onUpdate }) {
   const [transactions, setTransactions] = useState([]);
   const [isAdding, setIsAdding] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [payeeSuggestions, setPayeeSuggestions] = useState([]);
   
   // Editing state
   const [editingId, setEditingId] = useState(null);
@@ -21,6 +22,7 @@ export default function AccountDetails({ account, onUpdate }) {
   useEffect(() => {
     if (account) {
       fetchTransactions();
+      fetchPayeeSuggestions();
     }
   }, [account]);
 
@@ -34,6 +36,21 @@ export default function AccountDetails({ account, onUpdate }) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [menuOpenId]);
+
+  async function fetchPayeeSuggestions() {
+    try {
+      const [payees, accounts] = await Promise.all([
+        invoke('get_payees'),
+        invoke('get_accounts')
+      ]);
+      
+      const accountNames = accounts.map(a => a.name);
+      const uniqueSuggestions = [...new Set([...accountNames, ...payees])].sort();
+      setPayeeSuggestions(uniqueSuggestions);
+    } catch (e) {
+      console.error("Failed to fetch payee suggestions:", e);
+    }
+  }
 
   async function fetchTransactions() {
     try {
@@ -70,6 +87,7 @@ export default function AccountDetails({ account, onUpdate }) {
       
       // Refresh data
       fetchTransactions();
+      fetchPayeeSuggestions();
       if (onUpdate) onUpdate(); 
     } catch (e) {
       console.error("Failed to create transaction:", e);
@@ -190,6 +208,7 @@ export default function AccountDetails({ account, onUpdate }) {
               <input 
                 type="text" 
                 required
+                list="payee-suggestions"
                 placeholder="Payee"
                 className="w-full p-2 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
                 value={payee}
@@ -275,6 +294,7 @@ export default function AccountDetails({ account, onUpdate }) {
                       <td className="px-2 py-2">
                         <input 
                           type="text" 
+                          list="payee-suggestions"
                           className="w-full p-1 text-sm border rounded"
                           value={editForm.payee}
                           onChange={e => setEditForm({...editForm, payee: e.target.value})}
@@ -361,6 +381,12 @@ export default function AccountDetails({ account, onUpdate }) {
           </tbody>
         </table>
       </div>
+
+      <datalist id="payee-suggestions">
+        {payeeSuggestions.map((suggestion, index) => (
+          <option key={index} value={suggestion} />
+        ))}
+      </datalist>
     </div>
   );
 }

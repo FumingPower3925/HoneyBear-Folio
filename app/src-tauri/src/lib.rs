@@ -306,6 +306,22 @@ fn delete_transaction(app_handle: AppHandle, id: i32) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_payees(app_handle: AppHandle) -> Result<Vec<String>, String> {
+    let db_path = get_db_path(&app_handle)?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+    
+    let mut stmt = conn.prepare("SELECT DISTINCT payee FROM transactions ORDER BY payee").map_err(|e| e.to_string())?;
+    let payee_iter = stmt.query_map([], |row| row.get(0)).map_err(|e| e.to_string())?;
+    
+    let mut payees = Vec::new();
+    for payee in payee_iter {
+        payees.push(payee.map_err(|e| e.to_string())?);
+    }
+    
+    Ok(payees)
+}
+
+#[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
@@ -326,7 +342,8 @@ pub fn run() {
             get_transactions,
             get_all_transactions,
             update_transaction,
-            delete_transaction
+            delete_transaction,
+            get_payees
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
