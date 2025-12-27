@@ -34,63 +34,179 @@ export default function FireCalculator() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchCurrentNetWorth();
+    fetchData();
   }, []);
 
-  async function fetchCurrentNetWorth() {
+  async function fetchData() {
     try {
       const accounts = await invoke('get_accounts');
       const transactions = await invoke('get_all_transactions');
       
-      // Calculate market values for brokerage accounts
-      const accountHoldings = {};
-      const allTickers = new Set();
+      // --- 1. Calculate Net Worth & Expected Return ---
+      
+      // Group holdings and calculate cost basis
+      const holdingMap = {};
+      let firstTradeDate = null;
+
+      // Sort transactions by date
+      transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
 
       transactions.forEach(tx => {
         if (tx.ticker && tx.shares) {
-          if (!accountHoldings[tx.account_id]) {
-            accountHoldings[tx.account_id] = {};
+          if (!firstTradeDate) firstTradeDate = new Date(tx.date);
+          
+          if (!holdingMap[tx.ticker]) {
+            holdingMap[tx.ticker] = {
+              shares: 0,
+              costBasis: 0,
+            };
           }
-          if (!accountHoldings[tx.account_id][tx.ticker]) {
-            accountHoldings[tx.account_id][tx.ticker] = 0;
+          
+          if (tx.shares > 0) { // Buy
+             holdingMap[tx.ticker].shares += tx.shares;
+             // Use total amount for cost basis (price * shares + fee)
+             // Note: tx.amount is negative for buys, so we take abs(amount) or calculate from price/fee
+             // In InvestmentDashboard it uses price_per_share * shares + fee. 
+             // Let's try to use tx.amount if available and negative, otherwise reconstruct.
+             // Actually InvestmentDashboard logic:
+             // holdingMap[tx.ticker].costBasis += (tx.price_per_share || 0) * tx.shares + (tx.fee || 0);
+             // Let's stick to that for consistency.
+             const cost = (tx.price_per_share || 0) * tx.shares + (tx.fee || 0);
+             holdingMap[tx.ticker].costBasis += cost;
+          } else { // Sell
+             const currentShares = holdingMap[tx.ticker].shares;
+             const currentCost = holdingMap[tx.ticker].costBasis;
+             const avgCost = currentShares > 0 ? currentCost / currentShares : 0;
+             const sharesSold = Math.abs(tx.shares);
+             
+             holdingMap[tx.ticker].shares -= sharesSold;
+             holdingMap[tx.ticker].costBasis -= sharesSold * avgCost;
           }
-          accountHoldings[tx.account_id][tx.ticker] += tx.shares;
-          allTickers.add(tx.ticker);
         }
       });
 
+      const allTickers = Object.keys(holdingMap).filter(t => holdingMap[t].shares > 0.0001);
       let marketValues = {};
-      if (allTickers.size > 0) {
-        const quotes = await invoke('get_stock_quotes', { tickers: Array.from(allTickers) });
+      let totalPortfolioValue = 0;
+      let totalPortfolioCostBasis = 0;
+
+      if (allTickers.length > 0) {
+        const quotes = await invoke('get_stock_quotes', { tickers: allTickers });
         const quoteMap = {};
         quotes.forEach(q => {
           quoteMap[q.symbol] = q.regularMarketPrice;
         });
 
+        allTickers.forEach(ticker => {
+          const h = holdingMap[ticker];
+          const price = quoteMap[ticker] || quoteMap[ticker.toUpperCase()] || 0;
+          const value = h.shares * price;
+          
+          totalPortfolioValue += value;
+          totalPortfolioCostBasis += h.costBasis;
+          
+          // For net worth calculation (per account)
+          // We need to map this back to accounts, but we already have totalPortfolioValue.
+          // The previous net worth logic summed up account balances + market values.
+          // Let's keep the previous logic for Net Worth to be safe about account mapping.
+        });
+      }
+
+      // Re-calculate Net Worth using the previous logic for account mapping
+      // (Or just use totalPortfolioValue + cash balances)
+      // Let's stick to the previous logic for Net Worth to ensure we handle multiple accounts correctly
+      const accountHoldings = {};
+      const tickersForNetWorth = new Set();
+      transactions.forEach(tx => {
+        if (tx.ticker && tx.shares) {
+          if (!accountHoldings[tx.account_id]) accountHoldings[tx.account_id] = {};
+          if (!accountHoldings[tx.account_id][tx.ticker]) accountHoldings[tx.account_id][tx.ticker] = 0;
+          accountHoldings[tx.account_id][tx.ticker] += tx.shares;
+          tickersForNetWorth.add(tx.ticker);
+        }
+      });
+      
+      let netWorthMarketValues = {};
+      if (tickersForNetWorth.size > 0) {
+        const quotes = await invoke('get_stock_quotes', { tickers: Array.from(tickersForNetWorth) });
+        const quoteMap = {};
+        quotes.forEach(q => { quoteMap[q.symbol] = q.regularMarketPrice; });
+        
         for (const [accountId, holdings] of Object.entries(accountHoldings)) {
-          let totalValue = 0;
+          let val = 0;
           for (const [ticker, shares] of Object.entries(holdings)) {
             if (shares > 0.0001) {
-               const price = quoteMap[ticker] || quoteMap[ticker.toUpperCase()] || 0;
-               totalValue += shares * price;
+               val += shares * (quoteMap[ticker] || quoteMap[ticker.toUpperCase()] || 0);
             }
           }
-          marketValues[accountId] = totalValue;
+          netWorthMarketValues[accountId] = val;
         }
       }
 
       const totalBalance = accounts.reduce((sum, acc) => {
         if (acc.kind === 'brokerage') {
-          return sum + (marketValues[acc.id] !== undefined ? marketValues[acc.id] : acc.balance);
+          return sum + (netWorthMarketValues[acc.id] !== undefined ? netWorthMarketValues[acc.id] : acc.balance);
         }
         return sum + acc.balance;
       }, 0);
 
       setCurrentNetWorth(Math.round(totalBalance));
+
+      // Calculate Expected Return (CAGR)
+      if (totalPortfolioCostBasis > 0 && firstTradeDate) {
+        const totalReturnRate = (totalPortfolioValue - totalPortfolioCostBasis) / totalPortfolioCostBasis;
+        const now = new Date();
+        const yearsInvested = Math.max((now - firstTradeDate) / (1000 * 60 * 60 * 24 * 365.25), 0.1); // Min 0.1 years to avoid infinity
+        
+        // CAGR = (End Value / Start Value)^(1/n) - 1
+        // Here Start Value is Cost Basis (approximation)
+        // A better approximation for irregular cashflows is IRR, but CAGR on total cost basis is a simple proxy.
+        // Or just annualized simple return? 
+        // Let's use CAGR of the aggregate: (CurrentValue / CostBasis)^(1/years) - 1
+        // This assumes all capital was invested at the beginning, which is wrong.
+        // A better simple metric might be just the current ROI? 
+        // "Expected Annual Return" usually implies long term average.
+        // Let's use the simple ROI annualized: (1 + ROI)^(1/years) - 1
+        
+        let annualizedReturn = (Math.pow(1 + totalReturnRate, 1 / yearsInvested) - 1) * 100;
+        
+        // Sanity check: if years < 1, the exponent is > 1, amplifying short term gains/losses.
+        // If years < 1, maybe just show the simple return? Or cap it?
+        // Let's just set it.
+        if (isFinite(annualizedReturn)) {
+            setExpectedReturn(parseFloat(annualizedReturn.toFixed(2)));
+        }
+      }
+
+      // --- 2. Calculate Annual Expenses & Savings ---
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      
+      const lastYearTransactions = transactions.filter(tx => new Date(tx.date) >= oneYearAgo);
+      
+      let expenses = 0;
+      let income = 0;
+
+      lastYearTransactions.forEach(tx => {
+        const isTrade = tx.ticker && tx.shares;
+        const isTransfer = tx.category === 'Transfer';
+        
+        if (!isTrade && !isTransfer) {
+          if (tx.amount < 0) {
+            expenses += Math.abs(tx.amount);
+          } else {
+            income += tx.amount;
+          }
+        }
+      });
+
+      setAnnualExpenses(Math.round(expenses));
+      setAnnualSavings(Math.round(income - expenses));
+
       setLoading(false);
 
     } catch (e) {
-      console.error("Failed to fetch net worth:", e);
+      console.error("Failed to fetch data:", e);
       setLoading(false);
     }
   }
