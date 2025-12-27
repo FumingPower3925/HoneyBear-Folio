@@ -9,6 +9,7 @@ struct Account {
     id: i32,
     name: String,
     balance: f64,
+    kind: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -20,6 +21,10 @@ struct Transaction {
     notes: Option<String>,
     category: Option<String>,
     amount: f64,
+    ticker: Option<String>,
+    shares: Option<f64>,
+    price_per_share: Option<f64>,
+    commission: Option<f64>,
 }
 
 fn get_db_path(app_handle: &AppHandle) -> Result<PathBuf, String> {
@@ -28,6 +33,22 @@ fn get_db_path(app_handle: &AppHandle) -> Result<PathBuf, String> {
         fs::create_dir_all(&app_dir).map_err(|e| e.to_string())?;
     }
     Ok(app_dir.join("honeybear.db"))
+}
+
+fn add_column_if_not_exists(conn: &Connection, table: &str, column: &str, definition: &str) -> Result<(), String> {
+    let count: i32 = conn.query_row(
+        &format!("SELECT count(*) FROM pragma_table_info('{}') WHERE name = '{}'", table, column),
+        [],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+
+    if count == 0 {
+        conn.execute(
+            &format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, definition),
+            [],
+        ).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 fn init_db(app_handle: &AppHandle) -> Result<(), String> {
@@ -43,6 +64,8 @@ fn init_db(app_handle: &AppHandle) -> Result<(), String> {
         [],
     ).map_err(|e| e.to_string())?;
 
+    add_column_if_not_exists(&conn, "accounts", "kind", "TEXT DEFAULT 'cash'")?;
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY,
@@ -56,18 +79,23 @@ fn init_db(app_handle: &AppHandle) -> Result<(), String> {
         )",
         [],
     ).map_err(|e| e.to_string())?;
+
+    add_column_if_not_exists(&conn, "transactions", "ticker", "TEXT")?;
+    add_column_if_not_exists(&conn, "transactions", "shares", "REAL")?;
+    add_column_if_not_exists(&conn, "transactions", "price_per_share", "REAL")?;
+    add_column_if_not_exists(&conn, "transactions", "commission", "REAL")?;
     
     Ok(())
 }
 
 #[tauri::command]
-fn create_account(app_handle: AppHandle, name: String, balance: f64) -> Result<Account, String> {
+fn create_account(app_handle: AppHandle, name: String, balance: f64, kind: String) -> Result<Account, String> {
     let db_path = get_db_path(&app_handle)?;
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
     
     conn.execute(
-        "INSERT INTO accounts (name, balance) VALUES (?1, ?2)",
-        params![name, balance],
+        "INSERT INTO accounts (name, balance, kind) VALUES (?1, ?2, ?3)",
+        params![name, balance, kind],
     ).map_err(|e| e.to_string())?;
     
     let id = conn.last_insert_rowid() as i32;
@@ -76,6 +104,7 @@ fn create_account(app_handle: AppHandle, name: String, balance: f64) -> Result<A
         id,
         name,
         balance,
+        kind,
     })
 }
 
@@ -84,12 +113,13 @@ fn get_accounts(app_handle: AppHandle) -> Result<Vec<Account>, String> {
     let db_path = get_db_path(&app_handle)?;
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
     
-    let mut stmt = conn.prepare("SELECT id, name, balance FROM accounts").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, name, balance, kind FROM accounts").map_err(|e| e.to_string())?;
     let account_iter = stmt.query_map([], |row| {
         Ok(Account {
             id: row.get(0)?,
             name: row.get(1)?,
             balance: row.get(2)?,
+            kind: row.get(3).unwrap_or("cash".to_string()),
         })
     }).map_err(|e| e.to_string())?;
     
@@ -172,6 +202,10 @@ fn create_transaction(
         notes,
         category: final_category,
         amount,
+        ticker: None,
+        shares: None,
+        price_per_share: None,
+        commission: None,
     })
 }
 
@@ -180,7 +214,7 @@ fn get_transactions(app_handle: AppHandle, account_id: i32) -> Result<Vec<Transa
     let db_path = get_db_path(&app_handle)?;
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
     
-    let mut stmt = conn.prepare("SELECT id, account_id, date, payee, notes, category, amount FROM transactions WHERE account_id = ?1 ORDER BY date DESC, id DESC").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, account_id, date, payee, notes, category, amount, ticker, shares, price_per_share, commission FROM transactions WHERE account_id = ?1 ORDER BY date DESC, id DESC").map_err(|e| e.to_string())?;
     let transaction_iter = stmt.query_map(params![account_id], |row| {
         Ok(Transaction {
             id: row.get(0)?,
@@ -190,6 +224,10 @@ fn get_transactions(app_handle: AppHandle, account_id: i32) -> Result<Vec<Transa
             notes: row.get(4)?,
             category: row.get(5)?,
             amount: row.get(6)?,
+            ticker: row.get(7)?,
+            shares: row.get(8)?,
+            price_per_share: row.get(9)?,
+            commission: row.get(10)?,
         })
     }).map_err(|e| e.to_string())?;
     
@@ -206,7 +244,7 @@ fn get_all_transactions(app_handle: AppHandle) -> Result<Vec<Transaction>, Strin
     let db_path = get_db_path(&app_handle)?;
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
     
-    let mut stmt = conn.prepare("SELECT id, account_id, date, payee, notes, category, amount FROM transactions ORDER BY date DESC, id DESC").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, account_id, date, payee, notes, category, amount, ticker, shares, price_per_share, commission FROM transactions ORDER BY date DESC, id DESC").map_err(|e| e.to_string())?;
     let transaction_iter = stmt.query_map([], |row| {
         Ok(Transaction {
             id: row.get(0)?,
@@ -216,6 +254,10 @@ fn get_all_transactions(app_handle: AppHandle) -> Result<Vec<Transaction>, Strin
             notes: row.get(4)?,
             category: row.get(5)?,
             amount: row.get(6)?,
+            ticker: row.get(7)?,
+            shares: row.get(8)?,
+            price_per_share: row.get(9)?,
+            commission: row.get(10)?,
         })
     }).map_err(|e| e.to_string())?;
     
@@ -225,6 +267,106 @@ fn get_all_transactions(app_handle: AppHandle) -> Result<Vec<Transaction>, Strin
     }
     
     Ok(transactions)
+}
+
+#[tauri::command]
+fn create_brokerage_transaction(
+    app_handle: AppHandle,
+    brokerage_account_id: i32,
+    cash_account_id: i32,
+    date: String,
+    ticker: String,
+    shares: f64,
+    price_per_share: f64,
+    commission: f64,
+    is_buy: bool
+) -> Result<Transaction, String> {
+    let db_path = get_db_path(&app_handle)?;
+    let mut conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+    
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    let total_price = shares * price_per_share;
+    
+    // Brokerage Transaction
+    // For brokerage, we record the value change.
+    // Buy: +Value (shares * price)
+    // Sell: -Value (shares * price)
+    // Note: This is a simplification. Usually you track cost basis.
+    let brokerage_amount = if is_buy { total_price } else { -total_price };
+    let brokerage_shares = if is_buy { shares } else { -shares };
+    
+    tx.execute(
+        "INSERT INTO transactions (account_id, date, payee, notes, category, amount, ticker, shares, price_per_share, commission) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![
+            brokerage_account_id, 
+            date, 
+            if is_buy { "Buy" } else { "Sell" }, // Payee as Buy/Sell
+            format!("{} {} shares of {}", if is_buy { "Bought" } else { "Sold" }, shares, ticker),
+            "Investment",
+            brokerage_amount,
+            ticker,
+            brokerage_shares,
+            price_per_share,
+            commission
+        ],
+    ).map_err(|e| e.to_string())?;
+    
+    let id = tx.last_insert_rowid() as i32;
+
+    tx.execute(
+        "UPDATE accounts SET balance = balance + ?1 WHERE id = ?2",
+        params![brokerage_amount, brokerage_account_id],
+    ).map_err(|e| e.to_string())?;
+
+    // Cash Account Transaction
+    // Buy: - (Total + Commission)
+    // Sell: + (Total - Commission)
+    let cash_amount = if is_buy {
+        -(total_price + commission)
+    } else {
+        total_price - commission
+    };
+
+    // Get brokerage account name for payee
+    let brokerage_name: String = tx.query_row(
+        "SELECT name FROM accounts WHERE id = ?1",
+        params![brokerage_account_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+
+    tx.execute(
+        "INSERT INTO transactions (account_id, date, payee, notes, category, amount) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            cash_account_id, 
+            date, 
+            brokerage_name, 
+            format!("{} {} shares of {}", if is_buy { "Buy" } else { "Sell" }, shares, ticker),
+            "Transfer",
+            cash_amount
+        ],
+    ).map_err(|e| e.to_string())?;
+
+    tx.execute(
+        "UPDATE accounts SET balance = balance + ?1 WHERE id = ?2",
+        params![cash_amount, cash_account_id],
+    ).map_err(|e| e.to_string())?;
+
+    tx.commit().map_err(|e| e.to_string())?;
+    
+    Ok(Transaction {
+        id,
+        account_id: brokerage_account_id,
+        date,
+        payee: if is_buy { "Buy".to_string() } else { "Sell".to_string() },
+        notes: Some(format!("{} {} shares of {}", if is_buy { "Bought" } else { "Sold" }, shares, ticker)),
+        category: Some("Investment".to_string()),
+        amount: brokerage_amount,
+        ticker: Some(ticker),
+        shares: Some(brokerage_shares),
+        price_per_share: Some(price_per_share),
+        commission: Some(commission),
+    })
 }
 
 #[tauri::command]
@@ -273,6 +415,10 @@ fn update_transaction(
         notes,
         category,
         amount,
+        ticker: None,
+        shares: None,
+        price_per_share: None,
+        commission: None,
     })
 }
 
@@ -360,7 +506,8 @@ pub fn run() {
             update_transaction,
             delete_transaction,
             get_payees,
-            get_categories
+            get_categories,
+            create_brokerage_transaction
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

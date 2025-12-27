@@ -35,6 +35,15 @@ export default function AccountDetails({ account, onUpdate }) {
   const [category, setCategory] = useState('');
   const [notes, setNotes] = useState('');
   const [amount, setAmount] = useState('');
+  
+  // Brokerage Form State
+  const [ticker, setTicker] = useState('');
+  const [shares, setShares] = useState('');
+  const [pricePerShare, setPricePerShare] = useState('');
+  const [totalPrice, setTotalPrice] = useState('');
+  const [commission, setCommission] = useState('');
+  const [cashAccountId, setCashAccountId] = useState('');
+  const [isBuy, setIsBuy] = useState(true);
 
   useEffect(() => {
     if (account) {
@@ -67,6 +76,31 @@ export default function AccountDetails({ account, onUpdate }) {
     }
   }, [editForm.payee, availableAccounts]);
 
+  // Auto-calculate total price or price per share
+  const handleSharesChange = (e) => {
+    const newShares = e.target.value;
+    setShares(newShares);
+    if (newShares && pricePerShare) {
+      setTotalPrice((parseFloat(newShares) * parseFloat(pricePerShare)).toFixed(2));
+    }
+  };
+
+  const handlePricePerShareChange = (e) => {
+    const newPrice = e.target.value;
+    setPricePerShare(newPrice);
+    if (shares && newPrice) {
+      setTotalPrice((parseFloat(shares) * parseFloat(newPrice)).toFixed(2));
+    }
+  };
+
+  const handleTotalPriceChange = (e) => {
+    const newTotal = e.target.value;
+    setTotalPrice(newTotal);
+    if (shares && newTotal) {
+      setPricePerShare((parseFloat(newTotal) / parseFloat(shares)).toFixed(4));
+    }
+  };
+
   async function fetchSuggestions() {
     try {
       const [payees, accounts, categories] = await Promise.all([
@@ -78,11 +112,11 @@ export default function AccountDetails({ account, onUpdate }) {
       // Filter out current account from accounts list
       const otherAccounts = accounts
         .filter(a => a.id !== account.id)
-        .map(a => a.name);
+        .map(a => ({ name: a.name, id: a.id, kind: a.kind }));
       
       setAvailableAccounts(otherAccounts);
 
-      const accountOptions = otherAccounts.map(name => ({ value: name, label: 'Account', type: 'account' }));
+      const accountOptions = otherAccounts.map(acc => ({ value: acc.name, label: 'Account', type: 'account' }));
       const payeeOptions = payees.map(name => ({ value: name, label: 'Payee', type: 'payee' }));
       
       const combined = [...accountOptions, ...payeeOptions].sort((a, b) => a.value.localeCompare(b.value));
@@ -101,6 +135,11 @@ export default function AccountDetails({ account, onUpdate }) {
       
       setPayeeSuggestions(unique);
       setCategorySuggestions(categories);
+      
+      // Set default cash account if available
+      const cashAcc = otherAccounts.find(a => a.kind === 'cash');
+      if (cashAcc) setCashAccountId(cashAcc.id);
+
     } catch (e) {
       console.error("Failed to fetch suggestions:", e);
     }
@@ -123,19 +162,39 @@ export default function AccountDetails({ account, onUpdate }) {
   async function handleAddTransaction(e) {
     e.preventDefault();
     try {
-      await invoke('create_transaction', {
-        accountId: account.id,
-        date,
-        payee,
-        category: category || null,
-        notes: notes || null,
-        amount: parseFloat(amount) || 0.0
-      });
+      if (account.kind === 'brokerage') {
+        await invoke('create_brokerage_transaction', {
+          brokerageAccountId: account.id,
+          cashAccountId: parseInt(cashAccountId),
+          date,
+          ticker,
+          shares: parseFloat(shares),
+          pricePerShare: parseFloat(pricePerShare),
+          commission: parseFloat(commission) || 0.0,
+          isBuy
+        });
+        
+        setTicker('');
+        setShares('');
+        setPricePerShare('');
+        setTotalPrice('');
+        setCommission('');
+      } else {
+        await invoke('create_transaction', {
+          accountId: account.id,
+          date,
+          payee,
+          category: category || null,
+          notes: notes || null,
+          amount: parseFloat(amount) || 0.0
+        });
+        
+        setPayee('');
+        setCategory('');
+        setNotes('');
+        setAmount('');
+      }
       
-      setPayee('');
-      setCategory('');
-      setNotes('');
-      setAmount('');
       setIsAdding(false);
       
       fetchTransactions();
@@ -263,7 +322,145 @@ export default function AccountDetails({ account, onUpdate }) {
             </div>
             New Transaction
           </h3>
-          <form onSubmit={handleAddTransaction} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+          
+          {account.kind === 'brokerage' ? (
+            <form onSubmit={handleAddTransaction} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+              <div className="md:col-span-12 mb-2 flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    name="txType" 
+                    checked={isBuy} 
+                    onChange={() => setIsBuy(true)}
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <span className="text-sm font-medium text-slate-700">Buy</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    name="txType" 
+                    checked={!isBuy} 
+                    onChange={() => setIsBuy(false)}
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <span className="text-sm font-medium text-slate-700">Sell</span>
+                </label>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Date</label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    type="date" 
+                    required
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    value={date}
+                    onChange={e => setDate(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Cash Account</label>
+                <select
+                  required
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
+                  value={cashAccountId}
+                  onChange={e => setCashAccountId(e.target.value)}
+                >
+                  <option value="">Select Account</option>
+                  {availableAccounts.filter(a => a.kind === 'cash').map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Ticker</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="AAPL"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all uppercase"
+                  value={ticker}
+                  onChange={e => setTicker(e.target.value.toUpperCase())}
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Shares</label>
+                <input 
+                  type="number" 
+                  required
+                  step="any"
+                  placeholder="0"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  value={shares}
+                  onChange={handleSharesChange}
+                />
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Price / Share</label>
+                <div className="relative">
+                  <Euro className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    type="number" 
+                    required
+                    step="any"
+                    placeholder="0.00"
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    value={pricePerShare}
+                    onChange={handlePricePerShareChange}
+                  />
+                </div>
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Total Price</label>
+                <div className="relative">
+                  <Euro className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    type="number" 
+                    required
+                    step="0.01"
+                    placeholder="0.00"
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    value={totalPrice}
+                    onChange={handleTotalPriceChange}
+                  />
+                </div>
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Commission</label>
+                <div className="relative">
+                  <Euro className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    placeholder="0.00"
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    value={commission}
+                    onChange={e => setCommission(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="md:col-span-6 flex justify-end mt-2">
+                <button 
+                  type="submit" 
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 text-sm font-medium rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-2"
+                >
+                  <Check className="w-4 h-4" />
+                  Save Transaction
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleAddTransaction} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
             <div className="md:col-span-2">
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Date</label>
               <div className="relative">
@@ -348,6 +545,7 @@ export default function AccountDetails({ account, onUpdate }) {
               </button>
             </div>
           </form>
+          )}
         </div>
       )}
       
