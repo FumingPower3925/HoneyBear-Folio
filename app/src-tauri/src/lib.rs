@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 use std::path::PathBuf;
@@ -116,9 +116,22 @@ fn create_transaction(
     
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
+    // Check if payee matches another account
+    let target_account_opt: Option<i32> = tx.query_row(
+        "SELECT id FROM accounts WHERE name = ?1 AND id != ?2",
+        params![payee, account_id],
+        |row| row.get(0),
+    ).optional().map_err(|e| e.to_string())?;
+
+    let final_category = if target_account_opt.is_some() {
+        Some("Transfer".to_string())
+    } else {
+        category.clone()
+    };
+
     tx.execute(
         "INSERT INTO transactions (account_id, date, payee, notes, category, amount) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![account_id, date, payee, notes, category, amount],
+        params![account_id, date, payee, notes, final_category, amount],
     ).map_err(|e| e.to_string())?;
     
     let id = tx.last_insert_rowid() as i32;
@@ -128,6 +141,27 @@ fn create_transaction(
         params![amount, account_id],
     ).map_err(|e| e.to_string())?;
 
+    if let Some(target_id) = target_account_opt {
+        // Get source account name for the target transaction's payee
+        let source_name: String = tx.query_row(
+            "SELECT name FROM accounts WHERE id = ?1",
+            params![account_id],
+            |row| row.get(0),
+        ).map_err(|e| e.to_string())?;
+
+        // Insert target transaction
+        tx.execute(
+            "INSERT INTO transactions (account_id, date, payee, notes, category, amount) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![target_id, date, source_name, notes, "Transfer", -amount],
+        ).map_err(|e| e.to_string())?;
+
+        // Update target account balance
+        tx.execute(
+            "UPDATE accounts SET balance = balance + ?1 WHERE id = ?2",
+            params![-amount, target_id],
+        ).map_err(|e| e.to_string())?;
+    }
+
     tx.commit().map_err(|e| e.to_string())?;
     
     Ok(Transaction {
@@ -136,7 +170,7 @@ fn create_transaction(
         date,
         payee,
         notes,
-        category,
+        category: final_category,
         amount,
     })
 }
