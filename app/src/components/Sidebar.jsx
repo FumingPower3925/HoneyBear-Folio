@@ -15,6 +15,7 @@ export default function Sidebar({ onSelectAccount, refreshTrigger }) {
   const [isAdding, setIsAdding] = useState(false);
   const [newAccountName, setNewAccountName] = useState('');
   const [newAccountBalance, setNewAccountBalance] = useState('');
+  const [newAccountType, setNewAccountType] = useState('cash');
   const [selectedId, setSelectedId] = useState('all');
 
   useEffect(() => {
@@ -38,10 +39,12 @@ export default function Sidebar({ onSelectAccount, refreshTrigger }) {
     try {
       await invoke('create_account', { 
         name: newAccountName, 
-        balance: parseFloat(newAccountBalance) || 0.0 
+        balance: parseFloat(newAccountBalance) || 0.0,
+        kind: newAccountType
       });
       setNewAccountName('');
       setNewAccountBalance('');
+      setNewAccountType('cash');
       setIsAdding(false);
       fetchAccounts();
     } catch (e) {
@@ -94,79 +97,116 @@ export default function Sidebar({ onSelectAccount, refreshTrigger }) {
           </button>
         </div>
 
+        {/* Cash Accounts */}
         <div>
           <div className="flex items-center justify-between mb-3 px-2">
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Accounts</h2>
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cash Accounts</h2>
             <button 
-              onClick={() => setIsAdding(!isAdding)}
-              className="text-slate-500 hover:text-blue-400 transition-colors p-1 rounded hover:bg-slate-800"
-              title="Add Account"
+              onClick={() => { setIsAdding(true); setNewAccountType('cash'); }}
+              className="text-slate-500 hover:text-blue-400 transition-colors p-1 hover:bg-slate-800 rounded"
             >
               <Plus className="w-4 h-4" />
             </button>
           </div>
+          
+          <div className="space-y-1">
+            {accounts.filter(acc => acc.kind === 'cash').map(account => (
+              <button
+                key={account.id}
+                onClick={() => handleSelect(account.id, account)}
+                className={`w-full text-left py-2.5 px-3 rounded-lg transition-all duration-200 flex items-center justify-between group ${
+                  selectedId === account.id 
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-900/20' 
+                    : 'hover:bg-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <CreditCard className={`w-5 h-5 ${selectedId === account.id ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                  <span className="font-medium truncate max-w-[120px]">{account.name}</span>
+                </div>
+                <span className={`text-sm font-medium ${selectedId === account.id ? 'text-blue-100' : 'text-slate-500 group-hover:text-slate-300'}`}>
+                  €{account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
 
-          {isAdding && (
-            <form onSubmit={handleAddAccount} className="mb-4 bg-slate-800/50 p-3 rounded-lg border border-slate-700 animate-in slide-in-from-top-2 duration-200">
-              <input 
-                type="text" 
-                placeholder="Account Name" 
-                className="w-full mb-2 px-3 py-2 text-sm text-white bg-slate-900 border border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-slate-500"
-                value={newAccountName}
-                onChange={e => setNewAccountName(e.target.value)}
-                required
-                autoFocus
-              />
-              <input 
-                type="number" 
-                placeholder="0.00" 
-                className="w-full mb-3 px-3 py-2 text-sm text-white bg-slate-900 border border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-slate-500"
-                value={newAccountBalance}
-                onChange={e => setNewAccountBalance(e.target.value)}
-                step="0.01"
-              />
-              <div className="flex justify-end gap-2">
+        {/* Brokerage Accounts */}
+        <div>
+          <div className="flex items-center justify-between mb-3 px-2">
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Brokerage Accounts</h2>
+            <button 
+              onClick={() => { setIsAdding(true); setNewAccountType('brokerage'); }}
+              className="text-slate-500 hover:text-blue-400 transition-colors p-1 hover:bg-slate-800 rounded"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+          
+          <div className="space-y-1">
+            {accounts.filter(acc => acc.kind === 'brokerage').map(account => (
+              <button
+                key={account.id}
+                onClick={() => handleSelect(account.id, account)}
+                className={`w-full text-left py-2.5 px-3 rounded-lg transition-all duration-200 flex items-center justify-between group ${
+                  selectedId === account.id 
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-900/20' 
+                    : 'hover:bg-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <TrendingUp className={`w-5 h-5 ${selectedId === account.id ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                  <span className="font-medium truncate max-w-[120px]">{account.name}</span>
+                </div>
+                <span className={`text-sm font-medium ${selectedId === account.id ? 'text-blue-100' : 'text-slate-500 group-hover:text-slate-300'}`}>
+                  €{account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+        {isAdding && (
+          <div className="px-2">
+            <form onSubmit={handleAddAccount} className="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-3">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-medium text-slate-400">New {newAccountType === 'cash' ? 'Cash' : 'Brokerage'} Account</span>
                 <button 
                   type="button" 
-                  onClick={() => setIsAdding(false)} 
-                  className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded transition-colors"
+                  onClick={() => setIsAdding(false)}
+                  className="text-slate-500 hover:text-slate-300"
                 >
                   <X className="w-4 h-4" />
                 </button>
-                <button 
-                  type="submit" 
-                  className="p-1.5 text-blue-400 hover:text-blue-300 hover:bg-blue-900/30 rounded transition-colors"
-                >
-                  <Check className="w-4 h-4" />
-                </button>
               </div>
+              <input
+                type="text"
+                placeholder="Account Name"
+                value={newAccountName}
+                onChange={(e) => setNewAccountName(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+                autoFocus
+              />
+              <input
+                type="number"
+                step="0.01"
+                placeholder="Initial Balance"
+                value={newAccountBalance}
+                onChange={(e) => setNewAccountBalance(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+              <button 
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium py-2 rounded transition-colors flex items-center justify-center gap-2"
+              >
+                <Check className="w-4 h-4" />
+                Create Account
+              </button>
             </form>
-          )}
-
-          <ul className="space-y-1">
-            {accounts.map(account => (
-              <li key={account.id}>
-                <button 
-                  onClick={() => handleSelect(account.id, account)}
-                  className={`w-full text-left py-2.5 px-3 rounded-lg transition-all duration-200 flex justify-between items-center group ${
-                    selectedId === account.id 
-                      ? 'bg-slate-800 text-white border border-slate-700' 
-                      : 'hover:bg-slate-800/50 text-slate-400 hover:text-slate-200 border border-transparent'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <CreditCard className={`w-5 h-5 flex-shrink-0 ${selectedId === account.id ? 'text-blue-400' : 'text-slate-600 group-hover:text-slate-500'}`} />
-                    <span className="font-medium truncate">{account.name}</span>
-                  </div>
-                  <span className={`text-sm font-medium ${selectedId === account.id ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}`}>
-                    €{account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+          </div>
+        )}
       </div>
+
       
       {/* Footer */}
       <div className="p-4 border-t border-slate-800 text-xs text-slate-600 text-center">
