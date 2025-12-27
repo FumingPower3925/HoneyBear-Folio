@@ -425,7 +425,7 @@ export default function Dashboard() {
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-center">
                 <h3 className="text-sm font-medium text-slate-500 mb-2">Current Net Worth</h3>
                 <p className="text-2xl font-bold text-slate-800">
-                    ${accounts.reduce((sum, acc) => sum + acc.balance, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    €{accounts.reduce((sum, acc) => sum + acc.balance, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
             </div>
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-center">

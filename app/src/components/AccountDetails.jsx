@@ -658,7 +658,7 @@ export default function AccountDetails({ account, onUpdate }) {
                           {tx.notes || <span className="text-slate-300 italic">No notes</span>}
                         </td>
                         <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-bold cursor-pointer ${tx.amount >= 0 ? 'text-emerald-600' : 'text-rose-600'}`} onClick={() => startEditing(tx)}>
-                          {tx.amount >= 0 ? '+' : ''}{tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {tx.amount >= 0 ? '+' : ''}€{Math.abs(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium relative action-menu-container">
                           <button 

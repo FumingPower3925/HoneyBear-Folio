@@ -8,11 +8,13 @@ import {
   LayoutDashboard,
   X,
   Check,
-  List
+  List,
+  PieChart
 } from 'lucide-react';
 
 export default function Sidebar({ onSelectAccount, refreshTrigger }) {
   const [accounts, setAccounts] = useState([]);
+  const [marketValues, setMarketValues] = useState({});
   const [isAdding, setIsAdding] = useState(false);
   const [newAccountName, setNewAccountName] = useState('');
   const [newAccountBalance, setNewAccountBalance] = useState('');
@@ -21,6 +23,7 @@ export default function Sidebar({ onSelectAccount, refreshTrigger }) {
 
   useEffect(() => {
     fetchAccounts();
+    fetchMarketValues();
   }, [refreshTrigger]);
 
   async function fetchAccounts() {
@@ -33,7 +36,70 @@ export default function Sidebar({ onSelectAccount, refreshTrigger }) {
     }
   }
 
-  const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
+  async function fetchMarketValues() {
+    try {
+      const transactions = await invoke('get_all_transactions');
+      console.log("Transactions:", transactions);
+      
+      // Group holdings by account
+      const accountHoldings = {};
+      const allTickers = new Set();
+
+      transactions.forEach(tx => {
+        if (tx.ticker && tx.shares) {
+          if (!accountHoldings[tx.account_id]) {
+            accountHoldings[tx.account_id] = {};
+          }
+          if (!accountHoldings[tx.account_id][tx.ticker]) {
+            accountHoldings[tx.account_id][tx.ticker] = 0;
+          }
+          accountHoldings[tx.account_id][tx.ticker] += tx.shares;
+          allTickers.add(tx.ticker);
+        }
+      });
+
+      console.log("Account Holdings:", accountHoldings);
+      console.log("All Tickers:", Array.from(allTickers));
+
+      if (allTickers.size === 0) {
+        setMarketValues({});
+        return;
+      }
+
+      const quotes = await invoke('get_stock_quotes', { tickers: Array.from(allTickers) });
+      console.log("Quotes:", quotes);
+      
+      const quoteMap = {};
+      quotes.forEach(q => {
+        quoteMap[q.symbol] = q.regularMarketPrice;
+      });
+
+      const newMarketValues = {};
+      for (const [accountId, holdings] of Object.entries(accountHoldings)) {
+        let totalValue = 0;
+        for (const [ticker, shares] of Object.entries(holdings)) {
+          if (shares > 0.0001) {
+             // Try exact match or uppercase match
+             const price = quoteMap[ticker] || quoteMap[ticker.toUpperCase()] || 0;
+             totalValue += shares * price;
+          }
+        }
+        newMarketValues[accountId] = totalValue;
+      }
+      console.log("New Market Values:", newMarketValues);
+      setMarketValues(newMarketValues);
+
+    } catch (e) {
+      console.error("Failed to fetch market values:", e);
+    }
+  }
+
+  const totalBalance = accounts.reduce((sum, acc) => {
+    if (acc.kind === 'brokerage') {
+      return sum + (marketValues[acc.id] !== undefined ? marketValues[acc.id] : acc.balance);
+    }
+    return sum + acc.balance;
+  }, 0);
 
   async function handleAddAccount(e) {
     e.preventDefault();
@@ -95,6 +161,18 @@ export default function Sidebar({ onSelectAccount, refreshTrigger }) {
           >
             <LayoutDashboard className={`w-5 h-5 ${selectedId === 'dashboard' ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}`} />
             <span className="font-medium">Dashboard</span>
+          </button>
+
+          <button 
+            onClick={() => handleSelect('investment-dashboard', { id: 'investment-dashboard', name: 'Investments' })}
+            className={`w-full text-left py-2.5 px-3 rounded-lg transition-all duration-200 flex items-center gap-3 group mb-1 ${
+              selectedId === 'investment-dashboard' 
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-900/20' 
+                : 'hover:bg-slate-800 text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <PieChart className={`w-5 h-5 ${selectedId === 'investment-dashboard' ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}`} />
+            <span className="font-medium">Investments</span>
           </button>
 
           <button 
@@ -173,7 +251,7 @@ export default function Sidebar({ onSelectAccount, refreshTrigger }) {
                   <span className="font-medium truncate max-w-[120px]">{account.name}</span>
                 </div>
                 <span className={`text-sm font-medium ${selectedId === account.id ? 'text-blue-100' : 'text-slate-500 group-hover:text-slate-300'}`}>
-                  €{account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  €{(marketValues[account.id] !== undefined ? marketValues[account.id] : account.balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </button>
             ))}
