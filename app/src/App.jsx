@@ -2,6 +2,7 @@ import { useState } from "react";
 import Sidebar from "./components/Sidebar";
 import AccountDetails from "./components/AccountDetails";
 import Dashboard from "./components/Dashboard";
+import InvestmentDashboard from "./components/InvestmentDashboard";
 import { Wallet } from "lucide-react";
 import "./App.css";
 
@@ -23,6 +24,8 @@ function App() {
       <main className="flex-1 p-8 overflow-y-auto">
         {selectedAccount?.id === 'dashboard' ? (
           <Dashboard />
+        ) : selectedAccount?.id === 'investment-dashboard' ? (
+          <InvestmentDashboard />
         ) : selectedAccount ? (
           <AccountDetails 
             key={selectedAccount.id} 

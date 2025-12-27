@@ -5,6 +5,41 @@ use std::path::PathBuf;
 use std::fs;
 
 #[derive(Serialize, Deserialize, Debug)]
+struct YahooQuote {
+    symbol: String,
+    #[serde(rename = "regularMarketPrice")]
+    price: f64,
+    #[serde(rename = "regularMarketChangePercent")]
+    change_percent: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct YahooChartMeta {
+    symbol: String,
+    #[serde(rename = "regularMarketPrice")]
+    regular_market_price: Option<f64>,
+    #[serde(rename = "chartPreviousClose")]
+    chart_previous_close: Option<f64>,
+    #[serde(rename = "previousClose")]
+    previous_close: Option<f64>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct YahooChartResult {
+    meta: YahooChartMeta,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct YahooChartBody {
+    result: Option<Vec<YahooChartResult>>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct YahooChartResponse {
+    chart: YahooChartBody,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 struct Account {
     id: i32,
     name: String,
@@ -84,6 +119,15 @@ fn init_db(app_handle: &AppHandle) -> Result<(), String> {
     add_column_if_not_exists(&conn, "transactions", "shares", "REAL")?;
     add_column_if_not_exists(&conn, "transactions", "price_per_share", "REAL")?;
     add_column_if_not_exists(&conn, "transactions", "commission", "REAL")?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS stock_prices (
+            ticker TEXT PRIMARY KEY,
+            price REAL NOT NULL,
+            last_updated TEXT NOT NULL
+        )",
+        [],
+    ).map_err(|e| e.to_string())?;
     
     Ok(())
 }
@@ -484,6 +528,123 @@ fn get_categories(app_handle: AppHandle) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
+async fn get_stock_quotes(app_handle: AppHandle, tickers: Vec<String>) -> Result<Vec<YahooQuote>, String> {
+    if tickers.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let client = reqwest::Client::builder()
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let mut tasks = Vec::new();
+
+    for ticker in tickers.clone() {
+        let client = client.clone();
+        tasks.push(tokio::spawn(async move {
+            let url = format!("https://query1.finance.yahoo.com/v8/finance/chart/{}?interval=1d&range=1d", ticker);
+            let res = client.get(&url)
+                .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .send()
+                .await;
+            
+            match res {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        let text_res = resp.text().await;
+                        match text_res {
+                            Ok(text) => {
+                                let json: Result<YahooChartResponse, _> = serde_json::from_str(&text);
+                                match json {
+                                    Ok(data) => {
+                                        if let Some(results) = data.chart.result {
+                                            if let Some(item) = results.first() {
+                                                let price = item.meta.regular_market_price.unwrap_or(0.0);
+                                                let prev = item.meta.chart_previous_close
+                                                    .or(item.meta.previous_close)
+                                                    .unwrap_or(price);
+                                                
+                                                let change_percent = if prev != 0.0 {
+                                                    ((price - prev) / prev) * 100.0
+                                                } else {
+                                                    0.0
+                                                };
+                                                return Some(YahooQuote {
+                                                    symbol: item.meta.symbol.clone(),
+                                                    price,
+                                                    change_percent
+                                                });
+                                            }
+                                        }
+                                    },
+                                    Err(e) => {
+                                        println!("Failed to parse JSON for {}: {}", ticker, e);
+                                    }
+                                }
+                            },
+                            Err(e) => println!("Failed to get text for {}: {}", ticker, e),
+                        }
+                    } else {
+                        println!("Request failed for {}: {}", ticker, resp.status());
+                    }
+                },
+                Err(e) => {
+                    println!("Request error for {}: {}", ticker, e);
+                }
+            }
+            None
+        }));
+    }
+
+    let mut quotes = Vec::new();
+    for task in tasks {
+        if let Ok(Some(quote)) = task.await {
+            quotes.push(quote);
+        }
+    }
+
+    // Update DB with new quotes
+    let db_path = get_db_path(&app_handle)?;
+    let mut conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    
+    {
+        let mut stmt = tx.prepare("INSERT OR REPLACE INTO stock_prices (ticker, price, last_updated) VALUES (?1, ?2, datetime('now'))").map_err(|e| e.to_string())?;
+        for quote in &quotes {
+            stmt.execute(params![quote.symbol, quote.price]).map_err(|e| e.to_string())?;
+        }
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+
+    // If we missed some tickers, try to fetch from DB
+    let found_symbols: Vec<String> = quotes.iter().map(|q| q.symbol.clone()).collect();
+    let missing_tickers: Vec<String> = tickers.into_iter()
+        .filter(|t| !found_symbols.iter().any(|s| s.eq_ignore_ascii_case(t)))
+        .collect();
+
+    if !missing_tickers.is_empty() {
+        let conn = Connection::open(get_db_path(&app_handle)?).map_err(|e| e.to_string())?;
+        let mut stmt = conn.prepare("SELECT ticker, price FROM stock_prices WHERE ticker = ?1 COLLATE NOCASE").map_err(|e| e.to_string())?;
+        
+        for ticker in missing_tickers {
+            let res: Result<(String, f64), _> = stmt.query_row(params![ticker], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            });
+            
+            if let Ok((symbol, price)) = res {
+                quotes.push(YahooQuote {
+                    symbol,
+                    price,
+                    change_percent: 0.0 // We don't store change percent in DB yet, could add it
+                });
+            }
+        }
+    }
+
+    Ok(quotes)
+}
+
+#[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
@@ -507,7 +668,8 @@ pub fn run() {
             delete_transaction,
             get_payees,
             get_categories,
-            create_brokerage_transaction
+            create_brokerage_transaction,
+            get_stock_quotes
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
