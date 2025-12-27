@@ -1,51 +1,40 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
+import Sidebar from "./components/Sidebar";
 import "./App.css";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  const [selectedAccount, setSelectedAccount] = useState(null);
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    <div className="flex h-screen bg-gray-100 text-gray-900 font-sans">
+      <Sidebar onSelectAccount={setSelectedAccount} />
+      
+      <main className="flex-1 p-8 overflow-y-auto">
+        {selectedAccount ? (
+          <div>
+            <header className="mb-8 border-b border-gray-200 pb-4">
+              <h1 className="text-3xl font-bold text-gray-800">{selectedAccount.name}</h1>
+              <p className="text-xl text-gray-600 mt-2">
+                Balance: <span className="font-semibold text-green-600">${selectedAccount.balance.toFixed(2)}</span>
+              </p>
+            </header>
+            
+            <div className="bg-white rounded-lg shadow p-6">
+              <p className="text-gray-500 italic">Transactions will appear here...</p>
+              {/* Placeholder for transaction list */}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-gray-400">
+            <div className="text-6xl mb-4">🐻</div>
+            <h2 className="text-2xl font-semibold mb-2">Welcome to HoneyBear Folio</h2>
+            <p>Select an account from the sidebar to view details.</p>
+          </div>
+        )}
+      </main>
+    </div>
   );
 }
 
 export default App;
+
