@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./theme.css";
 
 :root {
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
@@ -31,6 +32,17 @@
   * {
     scrollbar-width: thin;
     scrollbar-color: rgb(203, 213, 225) rgb(241, 245, 249);
+  }
+
+  /* Remove number input arrows */
+  input[type=number]::-webkit-inner-spin-button, 
+  input[type=number]::-webkit-outer-spin-button { 
+    -webkit-appearance: none; 
+    margin: 0; 
+  }
+
+  input[type=number] {
+    -moz-appearance: textfield;
   }
 }
 
