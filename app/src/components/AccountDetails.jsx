@@ -329,7 +329,16 @@ export default function AccountDetails({ account, onUpdate }) {
   }
 
   async function deleteTransaction(id) {
-    if (!confirm("Are you sure you want to delete this transaction?")) return;
+    const confirmed = await ask(
+      "Are you sure you want to delete this transaction?",
+      {
+        title: "Transaction",
+        kind: "warning",
+        okLabel: "Delete",
+        cancelLabel: "Cancel",
+      },
+    );
+    if (!confirmed) return;
     try {
       await invoke("delete_transaction", { id });
       setMenuOpenId(null);
@@ -522,7 +531,8 @@ export default function AccountDetails({ account, onUpdate }) {
                     // Slight timeout to ensure input renders before focus
                     setTimeout(() => {
                       const escapedName =
-                        typeof CSS !== "undefined" && typeof CSS.escape === "function"
+                        typeof CSS !== "undefined" &&
+                        typeof CSS.escape === "function"
                           ? CSS.escape(account.name)
                           : account.name.replace(/"/g, '\\"');
                       const input = document.querySelector(
