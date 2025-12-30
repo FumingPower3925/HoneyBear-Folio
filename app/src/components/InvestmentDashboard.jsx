@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { invoke } from "@tauri-apps/api/core";
 import { RefreshCw } from "lucide-react";
+import { useFormatNumber } from "../utils/format";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import { Doughnut } from "react-chartjs-2";
 
@@ -11,6 +12,8 @@ export default function InvestmentDashboard() {
   const [holdings, setHoldings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const formatNumber = useFormatNumber();
 
   useEffect(() => {
     fetchData();
@@ -235,11 +238,7 @@ export default function InvestmentDashboard() {
                 Total Portfolio Value
               </h3>
               <p className="text-3xl font-bold text-slate-900 tracking-tight">
-                {totalValue.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}{" "}
-                €
+                {formatNumber(totalValue)} €
               </p>
             </div>
             <div className="bg-gradient-to-br from-white to-slate-50 p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col justify-center transition-all duration-300 hover:shadow-xl hover:border-emerald-200 hover:-translate-y-1 group cursor-pointer">
@@ -254,11 +253,12 @@ export default function InvestmentDashboard() {
                 }
                 <span className="text-sm font-medium ml-2 text-slate-500">
                   (
-                  {holdings
-                    .reduce((prev, current) =>
+                  {formatNumber(
+                    holdings.reduce((prev, current) =>
                       prev.roi > current.roi ? prev : current,
-                    )
-                    .roi.toFixed(2)}
+                    ).roi,
+                    { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                  )}
                   %)
                 </span>
               </p>
@@ -338,18 +338,32 @@ export default function InvestmentDashboard() {
                           {h.ticker}
                         </div>
                         <div className="text-xs text-slate-500">
-                          {h.shares.toFixed(2)} shares @ {h.price.toFixed(2)} €
+                          {formatNumber(h.shares, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                          shares @{" "}
+                          {formatNumber(h.price, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                          €
                         </div>
                       </td>
                       <td className="p-4 text-right">
                         <div className="font-semibold text-slate-700">
-                          {h.currentValue.toLocaleString(undefined, {
+                          {formatNumber(h.currentValue, {
                             maximumFractionDigits: 0,
                           })}{" "}
                           €
                         </div>
                         <div className="text-xs text-slate-500">
-                          Cost: {h.costBasis.toFixed(0)} €
+                          Cost:{" "}
+                          {formatNumber(h.costBasis, {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          })}{" "}
+                          €
                         </div>
                       </td>
                       <td className="p-4 text-right">
@@ -361,7 +375,11 @@ export default function InvestmentDashboard() {
                           }`}
                         >
                           {h.roi > 0 ? "+" : ""}
-                          {h.roi.toFixed(2)}%
+                          {formatNumber(h.roi, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                          %
                         </span>
                       </td>
                     </tr>
@@ -393,6 +411,8 @@ function TreeMap({ items, totalValue }) {
 }
 
 function TreeMapNode({ items, x, y, w, h, totalValue }) {
+  const formatNumber = useFormatNumber();
+
   if (items.length === 0) return null;
 
   if (items.length === 1) {
@@ -430,11 +450,15 @@ function TreeMapNode({ items, x, y, w, h, totalValue }) {
           overflow: "hidden",
         }}
         className="flex flex-col items-center justify-center p-1 text-xs text-center transition-all hover:opacity-90 hover:z-10 hover:scale-[1.02] cursor-pointer"
-        title={`${item.ticker}: ${item.currentValue.toLocaleString()} € (${item.roi.toFixed(2)}%)`}
+        title={`${item.ticker}: ${formatNumber(item.currentValue)} € (${formatNumber(item.roi, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)`}
       >
         <span className="font-bold text-gray-800">{item.ticker}</span>
         <span className="text-gray-700 hidden sm:inline">
-          {item.roi.toFixed(1)}%
+          {formatNumber(item.roi, {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          })}
+          %
         </span>
       </div>
     );

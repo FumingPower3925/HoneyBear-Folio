@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 import { invoke } from "@tauri-apps/api/core";
 import ImportModal from "./ImportModal";
 import ExportModal from "./ExportModal";
+import SettingsModal from "./SettingsModal";
 import {
   Wallet,
   Plus,
@@ -16,10 +17,12 @@ import {
   Calculator,
   Download,
   Upload,
+  Settings,
 } from "lucide-react";
 import packageJson from "../../package.json";
 import { computeNetWorth } from "../utils/networth";
 import "../styles/Sidebar.css";
+import { useFormatNumber } from "../utils/format";
 
 export default function Sidebar({
   accounts,
@@ -31,12 +34,14 @@ export default function Sidebar({
   const [isAdding, setIsAdding] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [newAccountName, setNewAccountName] = useState("");
   const [newAccountBalance, setNewAccountBalance] = useState("");
   const [newAccountType, setNewAccountType] = useState("cash");
 
   // Compute total balance using helper so logic is shared with Dashboard/App
   const totalBalance = computeNetWorth(accounts, marketValues);
+  const formatNumber = useFormatNumber();
 
   async function handleAddAccount(e) {
     e.preventDefault();
@@ -80,13 +85,7 @@ export default function Sidebar({
             <TrendingUp className="w-3.5 h-3.5" />
             Net Worth
           </div>
-          <div className="net-worth-value">
-            {totalBalance.toLocaleString("en-US", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}{" "}
-            €
-          </div>
+          <div className="net-worth-value">{formatNumber(totalBalance)} €</div>
         </div>
       </div>
 
@@ -192,11 +191,7 @@ export default function Sidebar({
                   <span
                     className={`text-sm font-medium ${selectedId === account.id ? "text-blue-100" : "text-slate-500 group-hover:text-slate-300"}`}
                   >
-                    {account.balance.toLocaleString("en-US", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}{" "}
-                    €
+                    {formatNumber(account.balance)} €
                   </span>
                 </button>
               ))}
@@ -242,13 +237,11 @@ export default function Sidebar({
                   <span
                     className={`text-sm font-medium ${selectedId === account.id ? "text-blue-100" : "text-slate-500 group-hover:text-slate-300"}`}
                   >
-                    {(marketValues[account.id] !== undefined
-                      ? marketValues[account.id]
-                      : account.balance
-                    ).toLocaleString("en-US", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}{" "}
+                    {formatNumber(
+                      marketValues[account.id] !== undefined
+                        ? marketValues[account.id]
+                        : account.balance,
+                    )}{" "}
                     €
                   </span>
                 </button>
@@ -312,6 +305,13 @@ export default function Sidebar({
             <Download className="w-4 h-4" />
             <span className="text-xs font-medium">Export</span>
           </button>
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            className="sidebar-footer-button"
+          >
+            <Settings className="w-4 h-4" />
+            <span className="text-xs font-medium">Settings</span>
+          </button>
         </div>
         <div className="sidebar-version">
           v{packageJson.version} • HoneyBear Folio
@@ -329,6 +329,10 @@ export default function Sidebar({
 
       {showExportModal && (
         <ExportModal onClose={() => setShowExportModal(false)} />
+      )}
+
+      {showSettingsModal && (
+        <SettingsModal onClose={() => setShowSettingsModal(false)} />
       )}
     </div>
   );
