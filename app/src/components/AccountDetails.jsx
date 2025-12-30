@@ -32,6 +32,7 @@ export default function AccountDetails({ account, onUpdate }) {
   const [payeeSuggestions, setPayeeSuggestions] = useState([]);
   const [categorySuggestions, setCategorySuggestions] = useState([]);
   const [availableAccounts, setAvailableAccounts] = useState([]);
+  const [addTargetAccount, setAddTargetAccount] = useState(null);
   const [tickerSuggestions, setTickerSuggestions] = useState([]);
   const [showTickerSuggestions, setShowTickerSuggestions] = useState(false);
 
@@ -94,6 +95,15 @@ export default function AccountDetails({ account, onUpdate }) {
         .map((a) => ({ name: a.name, id: a.id, kind: a.kind }));
 
       setAvailableAccounts(otherAccounts);
+
+      // If viewing the consolidated "All" view, default the add-target to the first account
+      if (
+        account.id === "all" &&
+        otherAccounts.length > 0 &&
+        !addTargetAccount
+      ) {
+        setAddTargetAccount(otherAccounts[0]);
+      }
 
       const accountOptions = otherAccounts.map((acc) => ({
         value: acc.name,
@@ -298,7 +308,16 @@ export default function AccountDetails({ account, onUpdate }) {
   async function handleAddTransaction(e) {
     e.preventDefault();
     try {
-      if (account.kind === "brokerage") {
+      const target = account.id === "all" ? addTargetAccount : account;
+      if (!target) {
+        await ask("Please select an account to add the transaction to.", {
+          title: "Invalid Input",
+          kind: "error",
+        });
+        return;
+      }
+
+      if (target.kind === "brokerage") {
         if (!cashAccountId) {
           await ask("Please select a valid Cash Account.", {
             title: "Invalid Input",
@@ -308,7 +327,7 @@ export default function AccountDetails({ account, onUpdate }) {
         }
         await invoke("create_brokerage_transaction", {
           args: {
-            brokerageAccountId: account.id,
+            brokerageAccountId: target.id,
             cashAccountId: parseInt(cashAccountId),
             date,
             ticker,
@@ -326,7 +345,7 @@ export default function AccountDetails({ account, onUpdate }) {
         setFee("");
       } else {
         await invoke("create_transaction", {
-          accountId: account.id,
+          accountId: target.id,
           date,
           payee,
           category: category || null,
@@ -451,6 +470,12 @@ export default function AccountDetails({ account, onUpdate }) {
     );
   });
 
+  // When viewing the consolidated "All" view, allow adding to a selected account
+  const effectiveAddTarget = account.id === "all" ? addTargetAccount : account;
+  const effectiveKind = effectiveAddTarget
+    ? effectiveAddTarget.kind
+    : account.kind;
+
   return (
     <div className="max-w-full mx-4 lg:mx-8 px-2 lg:px-4 pb-8">
       {/* Header */}
@@ -526,10 +551,39 @@ export default function AccountDetails({ account, onUpdate }) {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          {account.id !== "all" &&
-            (!isAdding ? (
+          <div className="flex items-center gap-3">
+            {account.id === "all" && (
+              <select
+                value={addTargetAccount ? addTargetAccount.id : ""}
+                onChange={(e) => {
+                  const selected = availableAccounts.find(
+                    (a) => String(a.id) === String(e.target.value),
+                  );
+                  setAddTargetAccount(selected || null);
+                }}
+                className="px-3 py-2 bg-white border-2 border-slate-200 rounded-xl text-sm"
+                aria-label="Select account to add transaction"
+              >
+                {availableAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({a.kind})
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {!isAdding ? (
               <button
-                onClick={() => setIsAdding(true)}
+                onClick={() => {
+                  if (
+                    account.id === "all" &&
+                    !addTargetAccount &&
+                    availableAccounts.length
+                  ) {
+                    setAddTargetAccount(availableAccounts[0]);
+                  }
+                  setIsAdding(true);
+                }}
                 style={{
                   backgroundColor: "#2563eb",
                   color: "#ffffff",
@@ -581,93 +635,114 @@ export default function AccountDetails({ account, onUpdate }) {
                 <X className="w-5 h-5" style={{ color: "#334155" }} />
                 <span style={{ color: "#334155" }}>Cancel</span>
               </button>
-            ))}
-
-          <div className="relative account-action-menu">
-            <button
-              onClick={() => setAccountMenuOpen(!accountMenuOpen)}
-              className="p-3 bg-white border-2 border-slate-200 rounded-xl shadow-sm hover:border-slate-300 transition-all text-slate-600 hover:text-slate-900"
-            >
-              <MoreVertical className="w-5 h-5" />
-            </button>
-            {accountMenuOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-1 z-50 animate-in fade-in zoom-in-95 duration-200">
-                <button
-                  onClick={() => {
-                    setIsRenamingAccount(true);
-                    setAccountMenuOpen(false);
-                    // Slight timeout to ensure input renders before focus
-                    setTimeout(() => {
-                      const escapedName =
-                        typeof CSS !== "undefined" &&
-                        typeof CSS.escape === "function"
-                          ? CSS.escape(account.name)
-                          : account.name.replace(/"/g, '\\"');
-                      const input = document.querySelector(
-                        'input[value="' + escapedName + '"]',
-                      );
-                      if (input) input.focus();
-                    }, 50);
-                  }}
-                  className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                >
-                  <Edit className="w-4 h-4 text-slate-400" />
-                  Rename Account
-                </button>
-                <div className="h-px bg-slate-100 my-1" />
-                <button
-                  onClick={handleDeleteAccount}
-                  className="w-full text-left px-4 py-2.5 text-sm font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete Account
-                </button>
-              </div>
             )}
           </div>
+
+          {account.id !== "all" && (
+            <div className="relative account-action-menu">
+              <button
+                onClick={() => setAccountMenuOpen(!accountMenuOpen)}
+                className="p-3 bg-white border-2 border-slate-200 rounded-xl shadow-sm hover:border-slate-300 transition-all text-slate-600 hover:text-slate-900"
+              >
+                <MoreVertical className="w-5 h-5" />
+              </button>
+              {accountMenuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-1 z-50 animate-in fade-in zoom-in-95 duration-200">
+                  <button
+                    onClick={() => {
+                      setIsRenamingAccount(true);
+                      setAccountMenuOpen(false);
+                      // Slight timeout to ensure input renders before focus
+                      setTimeout(() => {
+                        const escapedName =
+                          typeof CSS !== "undefined" &&
+                          typeof CSS.escape === "function"
+                            ? CSS.escape(account.name)
+                            : account.name.replace(/"/g, '\\"');
+                        const input = document.querySelector(
+                          'input[value="' + escapedName + '"]',
+                        );
+                        if (input) input.focus();
+                      }, 50);
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <Edit className="w-4 h-4 text-slate-400" />
+                    Rename Account
+                  </button>
+                  <div className="h-px bg-slate-100 my-1" />
+                  <button
+                    onClick={handleDeleteAccount}
+                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete Account
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
       {/* Add Transaction Form */}
       {isAdding && (
-        <div className="bg-gradient-to-br from-white to-slate-50 p-4 rounded-2xl border-2 border-brand-200 shadow-xl mb-8 animate-slide-in">
+        <div className="bg-gradient-to-br from-white to-slate-50 py-4 px-4 lg:px-6 rounded-2xl border-2 border-brand-200 shadow-xl mb-8 animate-slide-in -mx-20 lg:-mx-28">
           <h3 className="text-lg font-bold mb-6 text-slate-900 flex items-center gap-3">
             <div className="bg-brand-100 p-2.5 rounded-xl">
               <Plus className="w-5 h-5 text-brand-600" />
             </div>
             New Transaction
+            {account.id === "all" && effectiveAddTarget && (
+              <span className="ml-3 text-sm text-slate-500">
+                for{" "}
+                <span className="font-medium text-slate-700">
+                  {effectiveAddTarget.name}
+                </span>
+              </span>
+            )}
           </h3>
 
-          {account.kind === "brokerage" ? (
+          {effectiveKind === "brokerage" ? (
             <form
               onSubmit={handleAddTransaction}
               className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end"
             >
-              <div className="md:col-span-12 mb-2 flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="txType"
-                    checked={isBuy}
-                    onChange={() => setIsBuy(true)}
-                    className="w-4 h-4 text-blue-600"
-                  />
-                  <span className="text-sm font-medium text-slate-700">
-                    Buy
-                  </span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="txType"
-                    checked={!isBuy}
-                    onChange={() => setIsBuy(false)}
-                    className="w-4 h-4 text-blue-600"
-                  />
-                  <span className="text-sm font-medium text-slate-700">
-                    Sell
-                  </span>
-                </label>
+              <div className="md:col-span-12 mb-2 flex items-center justify-between">
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="txType"
+                      checked={isBuy}
+                      onChange={() => setIsBuy(true)}
+                      className="w-4 h-4 text-blue-600"
+                    />
+                    <span className="text-sm font-medium text-slate-700">
+                      Buy
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="txType"
+                      checked={!isBuy}
+                      onChange={() => setIsBuy(false)}
+                      className="w-4 h-4 text-blue-600"
+                    />
+                    <span className="text-sm font-medium text-slate-700">
+                      Sell
+                    </span>
+                  </label>
+                </div>
+                {account.id === "all" && (
+                  <div className="text-sm text-slate-500">
+                    Account:{" "}
+                    <span className="font-medium text-slate-700">
+                      {effectiveAddTarget?.name}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="md:col-span-2">
@@ -713,7 +788,7 @@ export default function AccountDetails({ account, onUpdate }) {
                 />
               </div>
 
-              <div className="md:col-span-3 relative">
+              <div className="md:col-span-4 relative">
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
                   Ticker
                 </label>
@@ -760,7 +835,7 @@ export default function AccountDetails({ account, onUpdate }) {
                 )}
               </div>
 
-              <div className="md:col-span-2">
+              <div className="md:col-span-3">
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
                   Shares
                 </label>
@@ -825,7 +900,7 @@ export default function AccountDetails({ account, onUpdate }) {
                 </div>
               </div>
 
-              <div className="md:col-span-6 flex justify-end mt-2">
+              <div className="md:col-span-4 flex justify-end mt-2">
                 <button
                   type="submit"
                   className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-2"
@@ -840,6 +915,15 @@ export default function AccountDetails({ account, onUpdate }) {
               onSubmit={handleAddTransaction}
               className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end"
             >
+              {account.id === "all" && (
+                <div className="md:col-span-12 mb-2 text-sm text-slate-500">
+                  Account:{" "}
+                  <span className="font-medium text-slate-700">
+                    {effectiveAddTarget?.name}
+                  </span>
+                </div>
+              )}
+
               <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
                   Date
