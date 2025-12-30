@@ -15,6 +15,8 @@ import {
 } from "chart.js";
 import { Line, Doughnut, Bar } from "react-chartjs-2";
 import "../styles/Dashboard.css";
+import PropTypes from "prop-types";
+import { computeNetWorth } from "../utils/networth";
 
 ChartJS.register(
   CategoryScale,
@@ -29,26 +31,30 @@ ChartJS.register(
   BarElement,
 );
 
-export default function Dashboard() {
-  const [accounts, setAccounts] = useState([]);
+export default function Dashboard({
+  accounts: propAccounts = [],
+  marketValues = {},
+}) {
+  const [accounts, setAccounts] = useState(propAccounts);
   const [transactions, setTransactions] = useState([]);
   const [timeRange, setTimeRange] = useState("1Y"); // 1M, 3M, 6M, 1Y, ALL
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [accs, txs] = await Promise.all([
-          invoke("get_accounts"),
-          invoke("get_all_transactions"),
-        ]);
-        setAccounts(accs);
+        const txs = await invoke("get_all_transactions");
         setTransactions(txs);
+        // If parent did not pass accounts, fetch accounts from backend
+        if (!propAccounts || propAccounts.length === 0) {
+          const accs = await invoke("get_accounts");
+          setAccounts(accs);
+        }
       } catch (e) {
         console.error("Failed to fetch data:", e);
       }
     };
     fetchData();
-  }, []);
+  }, [propAccounts]);
 
   const chartData = useMemo(() => {
     if (accounts.length === 0) return null;
@@ -118,6 +124,12 @@ export default function Dashboard() {
       return total;
     });
 
+    // Ensure current (last) data point uses current market values (same as Sidebar/Investments)
+    if (totalData.length > 0) {
+      const currentTotal = computeNetWorth(accounts, marketValues);
+      totalData[totalData.length - 1] = currentTotal;
+    }
+
     datasets.push({
       label: "Total Net Worth",
       data: totalData,
@@ -156,7 +168,7 @@ export default function Dashboard() {
       labels: sortedDates,
       datasets: datasets,
     };
-  }, [accounts, transactions, timeRange]);
+  }, [accounts, transactions, timeRange, marketValues]);
 
   const doughnutData = useMemo(() => {
     if (accounts.length === 0) return null;
@@ -412,12 +424,10 @@ export default function Dashboard() {
         <div className="summary-card group">
           <h3 className="summary-card-title">Current Net Worth</h3>
           <p className="summary-card-value">
-            {accounts
-              .reduce((sum, acc) => sum + acc.balance, 0)
-              .toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}{" "}
+            {computeNetWorth(accounts, marketValues).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}{" "}
             €
           </p>
         </div>
@@ -498,3 +508,8 @@ export default function Dashboard() {
     </div>
   );
 }
+
+Dashboard.propTypes = {
+  accounts: PropTypes.array,
+  marketValues: PropTypes.object,
+};

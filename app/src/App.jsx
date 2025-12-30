@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Sidebar from "./components/Sidebar";
+import { computeNetWorth } from "./utils/networth";
 import AccountDetails from "./components/AccountDetails";
 import Dashboard from "./components/Dashboard";
 import InvestmentDashboard from "./components/InvestmentDashboard";
@@ -104,17 +105,8 @@ function App() {
   }, []);
 
   // Calculate total balance
-  const totalBalance = accounts.reduce((sum, acc) => {
-    if (acc.kind === "brokerage") {
-      return (
-        sum +
-        (marketValues[acc.id] !== undefined
-          ? marketValues[acc.id]
-          : acc.balance)
-      );
-    }
-    return sum + acc.balance;
-  }, 0);
+
+  const totalBalance = computeNetWorth(accounts, marketValues);
 
   // Derive selectedAccount
   let selectedAccount = null;
@@ -156,7 +148,7 @@ function App() {
       <main className="flex-1 p-8 overflow-y-auto bg-slate-50/50">
         <div className="max-w-7xl mx-auto">
           {selectedAccountId === "dashboard" ? (
-            <Dashboard />
+            <Dashboard accounts={accounts} marketValues={marketValues} />
           ) : selectedAccountId === "investment-dashboard" ? (
             <InvestmentDashboard />
           ) : selectedAccountId === "fire-calculator" ? (
