@@ -8,9 +8,9 @@ import {
   FileJson,
   AlertCircle,
   CheckCircle,
-  ChevronDown,
 } from "lucide-react";
 import "../styles/SettingsModal.css";
+import CustomSelect from "./CustomSelect";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 
@@ -288,33 +288,33 @@ export default function ImportModal({ onClose, onImportComplete }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
-      <div className="bg-slate-900 w-full max-w-2xl rounded-xl border border-slate-700 shadow-2xl flex flex-col max-h-[90vh]">
-        <div className="p-6 border-b border-slate-800 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+    <div className="modal-overlay">
+      <div className="modal-container w-full max-w-2xl flex flex-col max-h-[90vh]">
+        <div className="modal-header border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+          <h2 className="modal-title">
             <Upload className="w-5 h-5 text-blue-500" />
             Import Transactions
           </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button onClick={onClose} className="modal-close-button">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1">
+        <div className="modal-body overflow-y-auto flex-1">
           {!file ? (
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-slate-700 rounded-xl p-12 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-slate-800/50 transition-all group"
+              className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-12 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-all group"
             >
               {file && file.name && file.name.endsWith(".json") ? (
-                <FileJson className="w-12 h-12 text-slate-600 group-hover:text-blue-500 mb-4 transition-colors" />
+                <FileJson className="w-12 h-12 text-slate-400 dark:text-slate-600 group-hover:text-blue-500 mb-4 transition-colors" />
               ) : (
-                <FileSpreadsheet className="w-12 h-12 text-slate-600 group-hover:text-blue-500 mb-4 transition-colors" />
+                <FileSpreadsheet className="w-12 h-12 text-slate-400 dark:text-slate-600 group-hover:text-blue-500 mb-4 transition-colors" />
               )}
-              <p className="text-slate-300 font-medium">
+              <p className="text-slate-600 dark:text-slate-300 font-medium">
                 Click to upload CSV, Excel or JSON file
               </p>
-              <p className="text-slate-500 text-sm mt-1">
+              <p className="text-slate-500 dark:text-slate-500 text-sm mt-1">
                 Supports .csv, .xlsx, .xls, .json
               </p>
               <input
@@ -327,21 +327,23 @@ export default function ImportModal({ onClose, onImportComplete }) {
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="flex items-center justify-between bg-slate-800 p-3 rounded-lg border border-slate-700">
+              <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-3">
                   <FileSpreadsheet className="w-5 h-5 text-green-500" />
-                  <span className="text-white font-medium">{file.name}</span>
+                  <span className="text-slate-900 dark:text-white font-medium">
+                    {file.name}
+                  </span>
                 </div>
                 <button
                   onClick={() => setFile(null)}
-                  className="text-slate-400 hover:text-red-400 text-sm"
+                  className="text-slate-500 dark:text-slate-400 hover:text-red-400 text-sm"
                 >
                   Change File
                 </button>
               </div>
 
               <div className="mb-2">
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
                   Indicate which column contains the account name or ID in the
                   mappings below — this will be used to assign each imported row
                   to the correct account.
@@ -349,35 +351,34 @@ export default function ImportModal({ onClose, onImportComplete }) {
               </div>
 
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   Map Columns
                 </h3>
-                <p className="text-xs text-slate-400 mb-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
                   Be sure to map the <strong>account</strong> column so the
                   importer can assign each row to the right account.
                 </p>
                 <div className="grid grid-cols-2 gap-4">
                   {Object.keys(mapping).map((field) => (
                     <div key={field}>
-                      <label className="block text-xs font-medium text-slate-500 mb-1 capitalize">
+                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-500 mb-1 capitalize">
                         {field}
                       </label>
                       <div className="relative">
-                        <select
+                        <CustomSelect
                           value={mapping[field]}
-                          onChange={(e) =>
-                            setMapping({ ...mapping, [field]: e.target.value })
+                          onChange={(v) =>
+                            setMapping({ ...mapping, [field]: v })
                           }
-                          className="modal-select appearance-none pr-8 text-sm"
-                        >
-                          <option value="">Skip</option>
-                          {columns.map((col) => (
-                            <option key={col} value={col}>
-                              {col}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 w-4 h-4" />
+                          options={[
+                            { value: "", label: "Skip" },
+                            ...columns.map((col) => ({
+                              value: col,
+                              label: col,
+                            })),
+                          ]}
+                          placeholder={"Select column"}
+                        />
                       </div>
                     </div>
                   ))}
@@ -385,14 +386,16 @@ export default function ImportModal({ onClose, onImportComplete }) {
               </div>
 
               {importing && (
-                <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
                   <div className="flex justify-between text-sm mb-2">
-                    <span className="text-slate-300">Importing...</span>
-                    <span className="text-slate-400">
+                    <span className="text-slate-700 dark:text-slate-300">
+                      Importing...
+                    </span>
+                    <span className="text-slate-500 dark:text-slate-400">
                       {progress.current} / {progress.total}
                     </span>
                   </div>
-                  <div className="w-full bg-slate-700 rounded-full h-2 mb-2">
+                  <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-2">
                     <div
                       className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                       style={{
@@ -418,10 +421,10 @@ export default function ImportModal({ onClose, onImportComplete }) {
           )}
         </div>
 
-        <div className="p-6 border-t border-slate-800 flex justify-end gap-3">
+        <div className="p-6 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+            className="px-4 py-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
             disabled={importing}
           >
             Cancel
