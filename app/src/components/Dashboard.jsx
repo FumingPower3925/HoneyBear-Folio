@@ -356,6 +356,18 @@ export default function Dashboard({
         grid: {
           color: "rgba(0, 0, 0, 0.05)",
         },
+        ticks: {
+          callback: function (value) {
+            const num = Number(value);
+            if (Number.isNaN(num)) return value;
+            return formatNumber(num, {
+              style: "currency",
+              currency: "EUR",
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+            });
+          },
+        },
       },
       x: {
         grid: {
@@ -383,6 +395,18 @@ export default function Dashboard({
         beginAtZero: false,
         grid: {
           color: "rgba(0, 0, 0, 0.05)",
+        },
+        ticks: {
+          callback: function (value) {
+            const num = Number(value);
+            if (Number.isNaN(num)) return value;
+            return formatNumber(num, {
+              style: "currency",
+              currency: "EUR",
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+            });
+          },
         },
       },
       x: {
