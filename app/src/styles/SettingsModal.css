@@ -5,7 +5,53 @@
   /* .modal-overlay moved to ./Modal.css */
 
   .modal-container {
-    @apply bg-white dark:bg-slate-900 w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl p-6 max-h-[90vh] overflow-y-auto;
+    @apply flex flex-col bg-white dark:bg-slate-900 w-[min(95vw,720px)] max-w-[720px] rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl p-6 max-h-[98vh] min-h-[600px] overflow-hidden overflow-x-hidden;
+  }
+
+  /* Ensure settings modal width cannot be overridden by other modal styles */
+  .modal-container.settings-modal-container {
+    @apply w-[min(95vw,720px)] max-w-[720px] overflow-x-visible; /* allow internal content to lay out but avoid horizontal scrollbar */
+  }
+
+  /* Narrow select triggers within settings modal */
+  .settings-modal-container .settings-select .custom-select-trigger {
+    @apply w-[18rem] max-w-full;
+  }
+
+  @media (max-width: 640px) {
+    .settings-modal-container .settings-select .custom-select-trigger {
+      @apply w-full;
+    }
+  }
+
+  /* Header action group on the right */
+  .modal-header > .flex.items-center.gap-2 {
+    @apply items-center;
+  }
+
+  @media (max-width: 640px) {
+    .modal-container {
+      @apply p-4;
+    }
+    .settings-tab {
+      @apply px-2 py-1 text-xs;
+    }
+    .settings-tabs {
+      @apply flex-row border-b border-slate-100 dark:border-slate-800 pr-0 mr-0 min-w-0;
+    }
+  }
+
+  /* Tabs */
+  .settings-tabs {
+    @apply flex flex-col gap-2 items-start border-r border-slate-100 dark:border-slate-800 pr-4 mr-6 min-w-[12rem];
+  }
+
+  .settings-tab {
+    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer w-full text-left;
+  }
+
+  .settings-tab-active {
+    @apply text-slate-900 dark:text-white font-semibold bg-slate-50 dark:bg-slate-800;
   }
 
   .modal-header {
@@ -20,8 +66,20 @@
     @apply text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white;
   }
 
+  .settings-content {
+    @apply flex gap-4 flex-1 overflow-y-auto min-h-0;
+  }
+
   .modal-body {
-    @apply space-y-4;
+    @apply space-y-4 flex-1 overflow-y-auto min-h-0 pb-6;
+  }
+
+  .settings-section-title {
+    @apply border-b border-slate-100 dark:border-slate-800 pb-2 mb-4;
+  }
+
+  .settings-section-title .settings-section-heading {
+    @apply text-lg font-semibold text-slate-700 dark:text-slate-200;
   }
 
   .modal-select {
@@ -53,5 +111,18 @@
   .dark select,
   :root.dark select {
     color-scheme: dark;
+  }
+
+  /* Footer and reset button styles */
+  .modal-footer {
+    @apply mt-auto border-t border-slate-100 dark:border-slate-800 pt-4 mt-6 flex justify-start bg-white dark:bg-slate-900 z-10 shadow-sm;
+  }
+
+  .reset-button {
+    @apply text-sm font-medium px-3 py-1 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm;
+  }
+
+  .reset-button:hover {
+    @apply text-red-700 dark:text-red-400 border-red-200 dark:border-red-600;
   }
 }
