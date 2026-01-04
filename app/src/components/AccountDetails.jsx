@@ -5,7 +5,6 @@ import "react-datepicker/dist/react-datepicker.css";
 import "../styles/datepicker.css";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { ask } from "@tauri-apps/plugin-dialog";
 import {
   Search,
   Plus,
@@ -29,11 +28,13 @@ import {
   getDatePickerFormat,
 } from "../utils/format";
 import { useNumberFormat } from "../contexts/number-format";
+import { useConfirm } from "../contexts/confirm";
 import NumberInput from "./NumberInput";
 import { t } from "../i18n/i18n";
 
 export default function AccountDetails({ account, onUpdate }) {
   const [transactions, setTransactions] = useState([]);
+  const confirm = useConfirm();
 
   const formatNumber = useFormatNumber();
   const parseNumber = useParseNumber();
@@ -303,13 +304,13 @@ export default function AccountDetails({ account, onUpdate }) {
   }
 
   async function handleDeleteAccount() {
-    const confirmed = await ask(
-      `Are you sure you want to delete "${account.name}" and ALL its transactions? This action cannot be undone.`,
+    const confirmed = await confirm(
+      t("confirm.delete_account", { name: account.name }),
       {
-        title: "Confirm Deletion",
+        title: t("confirm.delete_title"),
         kind: "warning",
-        okLabel: "Delete",
-        cancelLabel: "Cancel",
+        okLabel: t("confirm.delete"),
+        cancelLabel: t("confirm.cancel"),
       },
     );
 
@@ -328,18 +329,20 @@ export default function AccountDetails({ account, onUpdate }) {
     try {
       const target = account.id === "all" ? addTargetAccount : account;
       if (!target) {
-        await ask("Please select an account to add the transaction to.", {
-          title: "Invalid Input",
+        await confirm(t("confirm.select_account"), {
+          title: t("confirm.invalid_input_title"),
           kind: "error",
+          showCancel: false,
         });
         return;
       }
 
       if (target.kind === "brokerage") {
         if (!cashAccountId) {
-          await ask("Please select a valid Cash Account.", {
-            title: "Invalid Input",
+          await confirm(t("confirm.invalid_cash_account"), {
+            title: t("confirm.invalid_input_title"),
             kind: "error",
+            showCancel: false,
           });
           return;
         }
@@ -438,15 +441,12 @@ export default function AccountDetails({ account, onUpdate }) {
   }
 
   async function deleteTransaction(id) {
-    const confirmed = await ask(
-      "Are you sure you want to delete this transaction?",
-      {
-        title: "Transaction",
-        kind: "warning",
-        okLabel: "Delete",
-        cancelLabel: "Cancel",
-      },
-    );
+    const confirmed = await confirm(t("confirm.delete_transaction"), {
+      title: t("confirm.transaction_title"),
+      kind: "warning",
+      okLabel: t("confirm.delete"),
+      cancelLabel: t("confirm.cancel"),
+    });
     if (!confirmed) return;
     try {
       await invoke("delete_transaction", { id });
@@ -986,13 +986,13 @@ export default function AccountDetails({ account, onUpdate }) {
 
               <div className="md:col-span-3">
                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
-                  Notes
+                  {t("account.notes")}
                 </label>
                 <div className="relative">
                   <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="What was this for?"
+                    placeholder={t("account.notes_placeholder")}
                     className="w-full pl-10 pr-3 py-2.5 text-sm border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all hover:border-slate-300 dark:hover:border-slate-600"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
@@ -1069,7 +1069,7 @@ export default function AccountDetails({ account, onUpdate }) {
                   Category
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-bold !text-slate-700 dark:!text-slate-300 uppercase tracking-wider">
-                  Notes
+                  {t("account.notes")}
                 </th>
                 <th className="px-6 py-4 text-right text-xs font-bold !text-slate-700 dark:!text-slate-300 uppercase tracking-wider w-36">
                   Amount
@@ -1500,7 +1500,7 @@ export default function AccountDetails({ account, onUpdate }) {
                         >
                           {tx.notes || (
                             <span className="text-slate-300 dark:text-slate-600 italic">
-                              No notes
+                              {t("account.no_notes")}
                             </span>
                           )}
                         </td>
