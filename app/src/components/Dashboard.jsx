@@ -33,6 +33,34 @@ ChartJS.register(
   BarElement,
 );
 
+function useIsDark() {
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== "undefined") {
+      return document.documentElement.classList.contains("dark");
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === "class") {
+          setIsDark(document.documentElement.classList.contains("dark"));
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  return isDark;
+}
+
 export default function Dashboard({
   accounts: propAccounts = [],
   marketValues = {},
@@ -40,6 +68,7 @@ export default function Dashboard({
   const [accounts, setAccounts] = useState(propAccounts);
   const [transactions, setTransactions] = useState([]);
   const [timeRange, setTimeRange] = useState("1Y"); // 1M, 3M, 6M, 1Y, ALL
+  const isDark = useIsDark();
 
   const formatNumber = useFormatNumber();
   const formatDate = useFormatDate();
@@ -138,11 +167,22 @@ export default function Dashboard({
     datasets.push({
       label: "Total Net Worth",
       data: totalData,
-      borderColor: "rgb(15, 23, 42)", // slate-900
-      backgroundColor: "rgba(15, 23, 42, 0.1)",
+      borderColor: "rgb(37, 99, 235)", // brand-600
+      backgroundColor: (context) => {
+        const ctx = context.chart.ctx;
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, "rgba(37, 99, 235, 0.2)");
+        gradient.addColorStop(1, "rgba(37, 99, 235, 0)");
+        return gradient;
+      },
       borderWidth: 3,
-      tension: 0.1,
-      fill: false,
+      tension: 0.4,
+      fill: true,
+      pointRadius: 0,
+      pointHoverRadius: 6,
+      pointHoverBackgroundColor: "rgb(37, 99, 235)",
+      pointHoverBorderColor: "#fff",
+      pointHoverBorderWidth: 2,
     });
 
     // Individual Account Datasets
@@ -162,10 +202,14 @@ export default function Dashboard({
         label: acc.name,
         data: accData,
         borderColor: color,
-        backgroundColor: color.replace("rgb", "rgba").replace(")", ", 0.1)"),
+        backgroundColor: "transparent",
         borderWidth: 2,
-        tension: 0.1,
+        tension: 0.4,
         fill: false,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        borderDash: [5, 5], // Dashed lines for individual accounts to reduce noise
+        hidden: true, // Hide individual accounts by default to keep it clean
       });
     });
 
@@ -202,14 +246,14 @@ export default function Dashboard({
     const data = Object.values(assetTypes);
 
     const colors = [
-      "rgb(59, 130, 246)", // blue
-      "rgb(16, 185, 129)", // green
-      "rgb(245, 158, 11)", // amber
-      "rgb(239, 68, 68)", // red
-      "rgb(139, 92, 246)", // violet
-      "rgb(236, 72, 153)", // pink
-      "rgb(14, 165, 233)", // sky
-      "rgb(249, 115, 22)", // orange
+      "rgb(59, 130, 246)", // blue-500
+      "rgb(16, 185, 129)", // emerald-500
+      "rgb(245, 158, 11)", // amber-500
+      "rgb(244, 63, 94)", // rose-500
+      "rgb(139, 92, 246)", // violet-500
+      "rgb(6, 182, 212)", // cyan-500
+      "rgb(99, 102, 241)", // indigo-500
+      "rgb(249, 115, 22)", // orange-500
     ];
 
     return {
@@ -218,12 +262,13 @@ export default function Dashboard({
         {
           data: data,
           backgroundColor: labels.map((_, i) => colors[i % colors.length]),
-          borderColor: "#ffffff",
-          borderWidth: 2,
+          borderColor: isDark ? "rgb(30, 41, 59)" : "#ffffff",
+          borderWidth: 4,
+          hoverOffset: 4,
         },
       ],
     };
-  }, [accounts, marketValues]);
+  }, [accounts, marketValues, isDark]);
 
   const expensesByCategoryData = useMemo(() => {
     if (transactions.length === 0) return null;
@@ -243,14 +288,14 @@ export default function Dashboard({
     );
 
     const colors = [
-      "rgb(239, 68, 68)", // red
-      "rgb(249, 115, 22)", // orange
-      "rgb(245, 158, 11)", // amber
-      "rgb(16, 185, 129)", // green
-      "rgb(14, 165, 233)", // sky
-      "rgb(59, 130, 246)", // blue
-      "rgb(139, 92, 246)", // violet
-      "rgb(236, 72, 153)", // pink
+      "rgb(244, 63, 94)", // rose-500
+      "rgb(249, 115, 22)", // orange-500
+      "rgb(245, 158, 11)", // amber-500
+      "rgb(16, 185, 129)", // emerald-500
+      "rgb(6, 182, 212)", // cyan-500
+      "rgb(59, 130, 246)", // blue-500
+      "rgb(139, 92, 246)", // violet-500
+      "rgb(236, 72, 153)", // pink-500
     ];
 
     return {
@@ -261,12 +306,13 @@ export default function Dashboard({
           backgroundColor: sortedCategories.map(
             (_, i) => colors[i % colors.length],
           ),
-          borderColor: "#ffffff",
-          borderWidth: 2,
+          borderColor: isDark ? "rgb(30, 41, 59)" : "#ffffff",
+          borderWidth: 4,
+          hoverOffset: 4,
         },
       ],
     };
-  }, [transactions]);
+  }, [transactions, isDark]);
 
   const incomeVsExpensesData = useMemo(() => {
     if (transactions.length === 0) return null;
@@ -332,76 +378,138 @@ export default function Dashboard({
         {
           label: "Income",
           data: incomeData,
-          backgroundColor: "rgba(16, 185, 129, 0.7)", // green
-          borderRadius: 4,
+          backgroundColor: "rgb(16, 185, 129)", // emerald-500
+          borderRadius: 6,
+          barPercentage: 0.6,
+          categoryPercentage: 0.8,
         },
         {
           label: "Expenses",
           data: expenseData,
-          backgroundColor: "rgba(239, 68, 68, 0.7)", // red
-          borderRadius: 4,
+          backgroundColor: "rgb(244, 63, 94)", // rose-500
+          borderRadius: 6,
+          barPercentage: 0.6,
+          categoryPercentage: 0.8,
         },
       ],
     };
   }, [transactions, timeRange, formatDate]);
 
-  const doughnutOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: "right",
+  const doughnutOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "65%",
+      borderRadius: 4,
+      plugins: {
+        legend: {
+          position: "right",
+          labels: {
+            usePointStyle: true,
+            boxWidth: 8,
+            padding: 20,
+            color: isDark ? "rgb(148, 163, 184)" : "rgb(100, 116, 139)",
+            font: {
+              family: "Inter",
+              size: 12,
+            },
+          },
+        },
+        title: {
+          display: false,
+        },
       },
-      title: {
-        display: true,
-        text: "Asset Allocation",
-      },
-    },
-  };
+    }),
+    [isDark],
+  );
 
-  const expensesOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: "right",
+  const expensesOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "65%",
+      borderRadius: 4,
+      plugins: {
+        legend: {
+          position: "right",
+          labels: {
+            usePointStyle: true,
+            boxWidth: 8,
+            padding: 20,
+            color: isDark ? "rgb(148, 163, 184)" : "rgb(100, 116, 139)",
+            font: {
+              family: "Inter",
+              size: 12,
+            },
+          },
+        },
+        title: {
+          display: false,
+        },
       },
-      title: {
-        display: true,
-        text: "Expenses by Category",
-      },
-    },
-  };
+    }),
+    [isDark],
+  );
 
   const barOptions = useMemo(() => {
-    const labelMap = {
-      "1M": "Last 1 Month",
-      "3M": "Last 3 Months",
-      "6M": "Last 6 Months",
-      "1Y": "Last 1 Year",
-      ALL: "All time",
-    };
-    const titleText = `Income vs Expenses (${labelMap[timeRange] || timeRange})`;
-
     return {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: {
           position: "top",
+          align: "end",
+          labels: {
+            usePointStyle: true,
+            boxWidth: 8,
+            color: isDark ? "rgb(148, 163, 184)" : "rgb(100, 116, 139)",
+            font: {
+              family: "Inter",
+              size: 12,
+            },
+          },
         },
         title: {
-          display: true,
-          text: titleText,
+          display: false,
+        },
+        tooltip: {
+          backgroundColor: isDark
+            ? "rgba(255, 255, 255, 0.9)"
+            : "rgba(15, 23, 42, 0.9)",
+          titleColor: isDark ? "rgb(15, 23, 42)" : "rgb(255, 255, 255)",
+          bodyColor: isDark ? "rgb(15, 23, 42)" : "rgb(255, 255, 255)",
+          padding: 12,
+          cornerRadius: 8,
+          titleFont: {
+            family: "Inter",
+            size: 13,
+          },
+          bodyFont: {
+            family: "Inter",
+            size: 12,
+          },
         },
       },
       scales: {
         y: {
           beginAtZero: true,
+          border: {
+            display: false,
+          },
           grid: {
-            color: "rgba(0, 0, 0, 0.05)",
+            color: isDark
+              ? "rgba(51, 65, 85, 0.6)"
+              : "rgba(226, 232, 240, 0.6)",
+            borderDash: [4, 4],
+            drawBorder: false,
           },
           ticks: {
+            font: {
+              family: "Inter",
+              size: 11,
+            },
+            color: isDark ? "rgb(148, 163, 184)" : "rgb(100, 116, 139)",
+            padding: 10,
             callback: function (value) {
               const num = Number(value);
               if (Number.isNaN(num)) return value;
@@ -416,50 +524,117 @@ export default function Dashboard({
         x: {
           grid: {
             display: false,
+            drawBorder: false,
+          },
+          ticks: {
+            font: {
+              family: "Inter",
+              size: 11,
+            },
+            color: isDark ? "rgb(148, 163, 184)" : "rgb(100, 116, 139)",
           },
         },
       },
     };
-  }, [timeRange, formatNumber]);
+  }, [formatNumber, isDark]);
 
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: "top",
-        display: false, // Hide default title since we added a custom one
-      },
-      title: {
-        display: false, // Hide default title since we added a custom one
-        text: "Net Worth Evolution",
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: false,
-        grid: {
-          color: "rgba(0, 0, 0, 0.05)",
+  const options = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false,
         },
-        ticks: {
-          callback: function (value) {
-            const num = Number(value);
-            if (Number.isNaN(num)) return value;
-            return formatNumber(num, {
-              style: "currency",
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
-            });
+        title: {
+          display: false,
+        },
+        tooltip: {
+          backgroundColor: isDark
+            ? "rgba(255, 255, 255, 0.9)"
+            : "rgba(15, 23, 42, 0.9)",
+          titleColor: isDark ? "rgb(15, 23, 42)" : "rgb(255, 255, 255)",
+          bodyColor: isDark ? "rgb(15, 23, 42)" : "rgb(255, 255, 255)",
+          padding: 12,
+          cornerRadius: 8,
+          titleFont: {
+            family: "Inter",
+            size: 13,
+          },
+          bodyFont: {
+            family: "Inter",
+            size: 12,
+          },
+          displayColors: false,
+          callbacks: {
+            label: function (context) {
+              let label = context.dataset.label || "";
+              if (label) {
+                label += ": ";
+              }
+              if (context.parsed.y !== null) {
+                label += formatNumber(context.parsed.y, {
+                  style: "currency",
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                });
+              }
+              return label;
+            },
           },
         },
       },
-      x: {
-        grid: {
-          display: false,
+      scales: {
+        y: {
+          beginAtZero: false,
+          border: {
+            display: false,
+          },
+          grid: {
+            color: isDark
+              ? "rgba(51, 65, 85, 0.6)"
+              : "rgba(226, 232, 240, 0.6)",
+            borderDash: [4, 4],
+            drawBorder: false,
+          },
+          ticks: {
+            font: {
+              family: "Inter",
+              size: 11,
+            },
+            color: isDark ? "rgb(148, 163, 184)" : "rgb(100, 116, 139)",
+            padding: 10,
+            callback: function (value) {
+              const num = Number(value);
+              if (Number.isNaN(num)) return value;
+              return formatNumber(num, {
+                style: "currency",
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+              });
+            },
+          },
+        },
+        x: {
+          grid: {
+            display: false,
+            drawBorder: false,
+          },
+          ticks: {
+            font: {
+              family: "Inter",
+              size: 11,
+            },
+            color: isDark ? "rgb(148, 163, 184)" : "rgb(100, 116, 139)",
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 8,
+          },
         },
       },
-    },
-  };
+    }),
+    [formatNumber, isDark],
+  );
 
   return (
     <div className="dashboard-container">

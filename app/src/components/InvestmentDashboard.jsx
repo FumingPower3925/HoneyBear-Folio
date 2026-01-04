@@ -9,10 +9,39 @@ import { t } from "../i18n/i18n";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
+function useIsDark() {
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== "undefined") {
+      return document.documentElement.classList.contains("dark");
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === "class") {
+          setIsDark(document.documentElement.classList.contains("dark"));
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  return isDark;
+}
+
 export default function InvestmentDashboard() {
   const [holdings, setHoldings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const isDark = useIsDark();
 
   const formatNumber = useFormatNumber();
 
@@ -113,14 +142,14 @@ export default function InvestmentDashboard() {
     if (holdings.length === 0) return null;
 
     const colors = [
-      "rgb(59, 130, 246)", // blue
-      "rgb(16, 185, 129)", // green
-      "rgb(245, 158, 11)", // amber
-      "rgb(239, 68, 68)", // red
-      "rgb(139, 92, 246)", // violet
-      "rgb(236, 72, 153)", // pink
-      "rgb(14, 165, 233)", // sky
-      "rgb(249, 115, 22)", // orange
+      "rgb(59, 130, 246)", // blue-500
+      "rgb(16, 185, 129)", // emerald-500
+      "rgb(245, 158, 11)", // amber-500
+      "rgb(244, 63, 94)", // rose-500
+      "rgb(139, 92, 246)", // violet-500
+      "rgb(6, 182, 212)", // cyan-500
+      "rgb(99, 102, 241)", // indigo-500
+      "rgb(249, 115, 22)", // orange-500
     ];
 
     return {
@@ -129,26 +158,41 @@ export default function InvestmentDashboard() {
         {
           data: holdings.map((h) => h.currentValue),
           backgroundColor: holdings.map((_, i) => colors[i % colors.length]),
-          borderColor: "#ffffff",
-          borderWidth: 2,
+          borderColor: isDark ? "rgb(30, 41, 59)" : "#ffffff",
+          borderWidth: 4,
+          hoverOffset: 4,
         },
       ],
     };
-  }, [holdings]);
+  }, [holdings, isDark]);
 
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: "right",
+  const chartOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "65%",
+      borderRadius: 4,
+      plugins: {
+        legend: {
+          position: "right",
+          labels: {
+            usePointStyle: true,
+            boxWidth: 8,
+            padding: 20,
+            color: isDark ? "rgb(148, 163, 184)" : "rgb(100, 116, 139)",
+            font: {
+              family: "Inter",
+              size: 12,
+            },
+          },
+        },
+        title: {
+          display: false,
+        },
       },
-      title: {
-        display: true,
-        text: "Portfolio Allocation",
-      },
-    },
-  };
+    }),
+    [isDark],
+  );
 
   return (
     <div className="h-full flex flex-col space-y-8 max-w-7xl mx-auto pb-8">
@@ -302,7 +346,11 @@ export default function InvestmentDashboard() {
                 Visual representation of holdings by size and performance
               </p>
               <div className="flex-1 min-h-0 border-2 border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden relative shadow-inner">
-                <TreeMap items={holdings} totalValue={totalValue} />
+                <TreeMap
+                  items={holdings}
+                  totalValue={totalValue}
+                  isDark={isDark}
+                />
               </div>
             </div>
           </div>
@@ -399,7 +447,7 @@ export default function InvestmentDashboard() {
   );
 }
 
-function TreeMap({ items, totalValue }) {
+function TreeMap({ items, totalValue, isDark }) {
   // Recursive binary split treemap
   return (
     <div className="w-full h-full relative">
@@ -410,12 +458,13 @@ function TreeMap({ items, totalValue }) {
         w={100}
         h={100}
         totalValue={totalValue}
+        isDark={isDark}
       />
     </div>
   );
 }
 
-function TreeMapNode({ items, x, y, w, h, totalValue }) {
+function TreeMapNode({ items, x, y, w, h, totalValue, isDark }) {
   const formatNumber = useFormatNumber();
 
   if (items.length === 0) return null;
@@ -429,18 +478,24 @@ function TreeMapNode({ items, x, y, w, h, totalValue }) {
     const roi = item.roi;
     let bgColor;
     if (roi >= 0) {
-      // Green: 0% -> #e6fffa (light), 50% -> #047857 (dark)
-      const intensity = Math.min(roi / 50, 1);
-      // Simple interpolation or classes. Let's use HSL.
-      // Green is approx 150 hue. Lightness 90% down to 40%.
-      const lightness = 90 - intensity * 50;
-      bgColor = `hsl(150, 70%, ${lightness}%)`;
+      // Emerald: 0% -> Light, High% -> Darker
+      // Base Emerald-500 is roughly hsl(160, 84%, 39%)
+      // Let's vary lightness from 95% (very light) to 40% (dark)
+      const intensity = Math.min(roi / 30, 1); // Cap at 30% ROI
+      const lightness = 95 - intensity * 55;
+      bgColor = `hsl(160, 84%, ${lightness}%)`;
     } else {
-      // Red: 0% -> #fff5f5, -50% -> #c53030
-      const intensity = Math.min(Math.abs(roi) / 50, 1);
-      const lightness = 90 - intensity * 50;
-      bgColor = `hsl(0, 70%, ${lightness}%)`;
+      // Rose: 0% -> Light, High% -> Darker
+      // Base Rose-500 is roughly hsl(343, 87%, 60%)
+      const intensity = Math.min(Math.abs(roi) / 30, 1);
+      const lightness = 95 - intensity * 45;
+      bgColor = `hsl(343, 87%, ${lightness}%)`;
     }
+
+    const textColor =
+      (roi >= 0 && roi > 15) || (roi < 0 && Math.abs(roi) > 15)
+        ? "white"
+        : "rgb(30, 41, 59)"; // slate-800
 
     return (
       <div
@@ -451,14 +506,16 @@ function TreeMapNode({ items, x, y, w, h, totalValue }) {
           width: `${w}%`,
           height: `${h}%`,
           backgroundColor: bgColor,
-          border: "1px solid white",
+          border: isDark ? "1px solid rgb(30, 41, 59)" : "1px solid white",
           overflow: "hidden",
         }}
         className="flex flex-col items-center justify-center p-1 text-xs text-center transition-all hover:opacity-90 hover:z-10 hover:scale-[1.02] cursor-pointer"
         title={`${item.ticker}: ${formatNumber(item.currentValue, { style: "currency" })} (${formatNumber(item.roi, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)`}
       >
-        <span className="font-bold text-gray-800">{item.ticker}</span>
-        <span className="text-gray-700 hidden sm:inline">
+        <span className="font-bold" style={{ color: textColor }}>
+          {item.ticker}
+        </span>
+        <span className="hidden sm:inline" style={{ color: textColor }}>
           {formatNumber(item.roi, {
             minimumFractionDigits: 1,
             maximumFractionDigits: 1,
@@ -528,6 +585,7 @@ function TreeMapNode({ items, x, y, w, h, totalValue }) {
         w={wA}
         h={hA}
         totalValue={totalValue}
+        isDark={isDark}
       />
       <TreeMapNode
         items={groupB}
@@ -536,6 +594,7 @@ function TreeMapNode({ items, x, y, w, h, totalValue }) {
         w={wB}
         h={hB}
         totalValue={totalValue}
+        isDark={isDark}
       />
     </>
   );
@@ -550,6 +609,7 @@ TreeMap.propTypes = {
     }),
   ).isRequired,
   totalValue: PropTypes.number.isRequired,
+  isDark: PropTypes.bool,
 };
 
 TreeMapNode.propTypes = {
@@ -565,4 +625,5 @@ TreeMapNode.propTypes = {
   w: PropTypes.number.isRequired,
   h: PropTypes.number.isRequired,
   totalValue: PropTypes.number.isRequired,
+  isDark: PropTypes.bool,
 };
