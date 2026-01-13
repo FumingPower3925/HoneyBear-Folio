@@ -72,13 +72,13 @@ struct YahooSearchResponse {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct Account {
-    id: i32,
-    name: String,
-    balance: f64,
-    currency: Option<String>,
+pub struct Account {
+    pub id: i32,
+    pub name: String,
+    pub balance: f64,
+    pub currency: Option<String>,
     #[serde(default = "default_exchange_rate")]
-    exchange_rate: f64,
+    pub exchange_rate: f64,
 }
 
 fn default_exchange_rate() -> f64 {
@@ -314,6 +314,15 @@ fn init_db(app_handle: &AppHandle) -> Result<(), String> {
             date TEXT NOT NULL,
             price REAL NOT NULL,
             PRIMARY KEY (ticker, date)
+        )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS custom_exchange_rates (
+            currency TEXT PRIMARY KEY,
+            rate REAL NOT NULL
         )",
         [],
     )
@@ -644,6 +653,106 @@ fn get_accounts_summary_db(db_path: &PathBuf, target: &str) -> Result<AccountsSu
 }
 
 // Triggering re-check
+fn get_custom_rates_map(db_path: &PathBuf) -> Result<HashMap<String, f64>, String> {
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+    let mut map = HashMap::new();
+    // Table might not exist yet if migration failed or something, but init_db runs on setup.
+    // However, if we just added it, it should be there.
+    // Use optional query or just assume it exists since init_db ensures it.
+    let mut stmt = conn
+        .prepare("SELECT currency, rate FROM custom_exchange_rates")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?))
+        })
+        .map_err(|e| e.to_string())?;
+
+    for r in rows {
+        let (c, rate) = r.map_err(|e| e.to_string())?;
+        map.insert(c, rate);
+    }
+    Ok(map)
+}
+
+pub fn calculate_account_balances(
+    mut accounts: Vec<Account>,
+    raw_data: Vec<(i32, String, f64)>,
+    target: &str,
+    rates: &HashMap<String, f64>,
+    custom_rates: &HashMap<String, f64>,
+) -> Vec<Account> {
+    let mut account_currency_map: HashMap<i32, String> = HashMap::new();
+    for acc in &accounts {
+        if let Some(c) = &acc.currency {
+            account_currency_map.insert(acc.id, c.clone());
+        }
+    }
+
+    // Helper to compute rate
+    let compute_rate = |src: &String,
+                        dst: &String,
+                        rates: &HashMap<String, f64>,
+                        custom_rates: &HashMap<String, f64>|
+     -> f64 {
+        if src == dst {
+            return 1.0;
+        }
+
+        // 1. Try direct pair first (e.g. EURGBP=X)
+        let direct_ticker = format!("{}{}=X", src, dst);
+        if let Some(r) = rates.get(&direct_ticker) {
+            if *r > 0.0 {
+                return *r;
+            }
+        }
+
+        // 2. Fallback to USD pivot
+        let get_rate_to_usd = |curr: &String| -> f64 {
+            if curr == "USD" {
+                return 1.0;
+            }
+            if let Some(r) = custom_rates.get(curr) {
+                return *r;
+            }
+            *rates.get(&format!("{}USD=X", curr)).unwrap_or(&1.0)
+        };
+
+        let r_src = get_rate_to_usd(src);
+        let r_dst = get_rate_to_usd(dst);
+
+        if r_dst == 0.0 {
+            return 1.0;
+        }
+        r_src / r_dst
+    };
+
+    let mut sums: HashMap<i32, f64> = HashMap::new();
+    for (acc_id, tx_curr, amt) in raw_data {
+        let acc_currency = account_currency_map
+            .get(&acc_id)
+            .map(|s| s.as_str())
+            .unwrap_or(target);
+        let rate = compute_rate(&tx_curr, &acc_currency.to_string(), rates, custom_rates);
+        let val = amt * rate;
+        sums.entry(acc_id).and_modify(|e| *e += val).or_insert(val);
+    }
+
+    for acc in &mut accounts {
+        if let Some(sum) = sums.get(&acc.id) {
+            acc.balance = *sum;
+        }
+
+        // Set exchange rate to target app currency
+        if let Some(acc_curr) = &acc.currency {
+            acc.exchange_rate = compute_rate(acc_curr, &target.to_string(), rates, custom_rates);
+        } else {
+            acc.exchange_rate = 1.0;
+        }
+    }
+    accounts
+}
+
 #[tauri::command]
 async fn get_accounts(
     app_handle: AppHandle,
@@ -662,8 +771,11 @@ async fn get_accounts(
     .await
     .map_err(|e| e.to_string())??;
 
-    let mut accounts = summary.accounts;
+    let accounts = summary.accounts;
     let raw_data = summary.raw_data;
+
+    // Load custom rates
+    let custom_rates = get_custom_rates_map(&db_path)?;
 
     // Determine which rates we need to fetch
     // Each account might have a specific currency preference.
@@ -679,21 +791,53 @@ async fn get_accounts(
 
     let mut tickers_to_fetch = HashSet::new();
 
-    for (acc_id, tx_curr, _) in &raw_data {
-        let acc_currency = account_currency_map.get(acc_id).unwrap_or(&target);
+    // 1. Identify all unique currencies involved
+    let mut all_currencies = HashSet::new();
+    all_currencies.insert(target.clone());
+    for acc in &accounts {
+        if let Some(c) = &acc.currency {
+            all_currencies.insert(c.clone());
+        }
+    }
+    for (_, tx_curr, _) in &raw_data {
+        all_currencies.insert(tx_curr.clone());
+    }
 
-        if tx_curr != acc_currency {
-            // We need rate tx_curr -> acc_currency
-            // Yahoo format: SOURCE + TARGET + =X
-            tickers_to_fetch.insert(format!("{}{}=X", tx_curr, acc_currency));
+    // 2. Identify yahoo currencies (non-USD, non-custom)
+    // We treat anything not in custom_rates as potentially on Yahoo.
+    // We will verify by fetching X->USD for all of them.
+    let mut yahoo_currencies = HashSet::new();
+    for c in &all_currencies {
+        if c != "USD" && !custom_rates.contains_key(c) {
+            yahoo_currencies.insert(c.clone());
         }
     }
 
-    // Also fetch rates for account currencies to the target global currency
+    // 3. Always fetch USD fallback for all yahoo currencies
+    for c in &yahoo_currencies {
+        tickers_to_fetch.insert(format!("{}USD=X", c));
+    }
+
+    // 4. Also fetch direct pairs if both sides are likely on Yahoo (to prefer direct rate)
+    for (acc_id, tx_curr, _) in &raw_data {
+        let acc_currency = account_currency_map.get(acc_id).unwrap_or(&target);
+        if tx_curr != acc_currency {
+            // If both are yahoo currencies (or USD), try fetching direct pair
+            let is_yahoo_or_usd = |c: &String| c == "USD" || yahoo_currencies.contains(c);
+            if is_yahoo_or_usd(tx_curr) && is_yahoo_or_usd(acc_currency) {
+                tickers_to_fetch.insert(format!("{}{}=X", tx_curr, acc_currency));
+            }
+        }
+    }
+
+    // Also for account currency -> target currency
     for acc in &accounts {
         if let Some(acc_curr) = &acc.currency {
             if acc_curr != &target {
-                tickers_to_fetch.insert(format!("{}{}=X", acc_curr, target));
+                let is_yahoo_or_usd = |c: &String| c == "USD" || yahoo_currencies.contains(c);
+                if is_yahoo_or_usd(acc_curr) && is_yahoo_or_usd(&target) {
+                    tickers_to_fetch.insert(format!("{}{}=X", acc_curr, target));
+                }
             }
         }
     }
@@ -718,39 +862,7 @@ async fn get_accounts(
         }
     }
 
-    let mut sums: HashMap<i32, f64> = HashMap::new();
-    for (acc_id, tx_curr, amt) in raw_data {
-        let acc_currency = account_currency_map.get(&acc_id).unwrap_or(&target);
-
-        let val = if tx_curr == *acc_currency {
-            amt
-        } else {
-            let symbol = format!("{}{}=X", tx_curr, acc_currency);
-            let rate = *rates.get(&symbol).unwrap_or(&1.0);
-            amt * rate
-        };
-
-        sums.entry(acc_id).and_modify(|e| *e += val).or_insert(val);
-    }
-
-    for acc in &mut accounts {
-        if let Some(sum) = sums.get(&acc.id) {
-            acc.balance = *sum;
-        }
-
-        // Set exchange rate to target app currency
-        if let Some(acc_curr) = &acc.currency {
-            if acc_curr == &target {
-                acc.exchange_rate = 1.0;
-            } else {
-                let symbol = format!("{}{}=X", acc_curr, target);
-                acc.exchange_rate = *rates.get(&symbol).unwrap_or(&1.0);
-            }
-        } else {
-            acc.exchange_rate = 1.0;
-        }
-    }
-
+    let accounts = calculate_account_balances(accounts, raw_data, &target, &rates, &custom_rates);
     Ok(accounts)
 }
 
@@ -1504,6 +1616,70 @@ fn get_categories(app_handle: AppHandle) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
+fn set_custom_exchange_rate(
+    app_handle: AppHandle,
+    currency: String,
+    rate: f64,
+) -> Result<(), String> {
+    let db_path = get_db_path(&app_handle)?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT OR REPLACE INTO custom_exchange_rates (currency, rate) VALUES (?1, ?2)",
+        params![currency, rate],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn get_custom_exchange_rate(
+    app_handle: AppHandle,
+    currency: String,
+) -> Result<Option<f64>, String> {
+    let db_path = get_db_path(&app_handle)?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare("SELECT rate FROM custom_exchange_rates WHERE currency = ?1")
+        .map_err(|e| e.to_string())?;
+    let mut rows = stmt.query(params![currency]).map_err(|e| e.to_string())?;
+
+    if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        let rate: f64 = row.get(0).map_err(|e| e.to_string())?;
+        Ok(Some(rate))
+    } else {
+        Ok(None)
+    }
+}
+
+#[tauri::command]
+async fn check_currency_availability(
+    app_handle: AppHandle,
+    currency: String,
+) -> Result<bool, String> {
+    if currency == "USD" {
+        return Ok(true);
+    }
+
+    let ticker = format!("{}USD=X", currency);
+    let client = reqwest::Client::builder()
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let quotes = get_stock_quotes_with_client(
+        client,
+        "https://query1.finance.yahoo.com".to_string(),
+        app_handle,
+        vec![ticker],
+    )
+    .await?;
+
+    Ok(!quotes.is_empty())
+}
+
+#[tauri::command]
 async fn search_ticker(
     app_handle: AppHandle,
     query: String,
@@ -2125,6 +2301,9 @@ pub fn run() {
             get_db_path_command,
             // Desktop theme helper
             get_system_theme,
+            set_custom_exchange_rate,
+            get_custom_exchange_rate,
+            check_currency_availability,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
