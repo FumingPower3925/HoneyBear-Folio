@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import PropTypes from "prop-types";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -57,6 +57,7 @@ export default function AccountDetails({ account, onUpdate }) {
   const [addTargetAccount, setAddTargetAccount] = useState(null);
   const [tickerSuggestions, setTickerSuggestions] = useState([]);
   const [showTickerSuggestions, setShowTickerSuggestions] = useState(false);
+  const [rules, setRules] = useState([]);
 
   // Editing state
   const [editingId, setEditingId] = useState(null);
@@ -110,13 +111,95 @@ export default function AccountDetails({ account, onUpdate }) {
   // Sorting State
   const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
 
+  // Rules Engine Logic
+  const prevValues = useRef({
+    payee,
+    category,
+    notes,
+    amount,
+    date,
+    ticker,
+    shares,
+    price: pricePerShare,
+    fee,
+  });
+
+  useEffect(() => {
+    if (!rules.length) return;
+
+    // Map rule field names to state values and setters
+    const fieldMap = {
+      payee: { value: payee, set: setPayee },
+      category: { value: category, set: setCategory },
+      notes: { value: notes, set: setNotes },
+      amount: { value: amount, set: setAmount },
+      date: { value: date, set: setDate },
+      ticker: { value: ticker, set: setTicker },
+      shares: { value: shares, set: setShares },
+      price: { value: pricePerShare, set: setPricePerShare },
+      fee: { value: fee, set: setFee },
+    };
+
+    const currentValues = {
+      payee,
+      category,
+      notes,
+      amount,
+      date,
+      ticker,
+      shares,
+      price: pricePerShare,
+      fee,
+    };
+
+    const sortedRules = [...rules].sort((a, b) => b.priority - a.priority);
+
+    // Identify changed fields
+    const changedFields = Object.keys(currentValues).filter(
+      (k) => currentValues[k] !== prevValues.current[k],
+    );
+
+    changedFields.forEach((field) => {
+      const val = currentValues[field];
+      // Find matching rules (exact match for now)
+      const matchingRules = sortedRules.filter(
+        (r) => r.match_field === field && r.match_pattern === val,
+      );
+      matchingRules.forEach((rule) => {
+        const target = fieldMap[rule.action_field];
+        if (target) {
+          // Only update if value is different to avoid loops (though useRef prevents infinite loop on same field)
+          if (target.value !== rule.action_value) {
+            target.set(rule.action_value);
+          }
+        }
+      });
+    });
+
+    prevValues.current = currentValues;
+  }, [
+    payee,
+    category,
+    notes,
+    rules,
+    amount,
+    date,
+    ticker,
+    shares,
+    pricePerShare,
+    fee,
+  ]);
+
   async function fetchSuggestions() {
     try {
-      const [payees, accountsList, categories] = await Promise.all([
-        invoke("get_payees"),
-        invoke("get_accounts"),
-        invoke("get_categories"),
-      ]);
+      const [payees, accountsList, categories, fetchedRules] =
+        await Promise.all([
+          invoke("get_payees"),
+          invoke("get_accounts"),
+          invoke("get_categories"),
+          invoke("get_rules"),
+        ]);
+      setRules(fetchedRules);
 
       // Filter out current account from accounts list
       const otherAccounts = accountsList
