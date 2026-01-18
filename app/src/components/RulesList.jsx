@@ -1,13 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import {
-  Plus,
-  Trash2,
-  Edit,
-  Save,
-  BookOpenCheck,
-  GripVertical,
-} from "lucide-react";
+import { Plus, Trash2, Edit, Save, GripVertical } from "lucide-react";
 import { useConfirm } from "../contexts/confirm";
 import { t } from "../i18n/i18n";
 import CustomSelect from "./CustomSelect";
@@ -206,16 +199,11 @@ export default function RulesList() {
     availableFields[0];
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto animate-in fade-in duration-500 rules-container">
-      <div className="flex items-center justify-between mb-8">
+    <div className="page-container rules-container animate-in fade-in duration-500">
+      <div className="hb-header-container mb-large">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <BookOpenCheck className="w-8 h-8 text-brand-600 dark:text-brand-400" />
-            {t("rules.title")}
-          </h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">
-            {t("rules.subtitle")}
-          </p>
+          <h1 className="hb-header-title">{t("rules.title")}</h1>
+          <p className="hb-header-subtitle">{t("rules.subtitle")}</p>
         </div>
       </div>
 

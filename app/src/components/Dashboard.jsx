@@ -1196,11 +1196,11 @@ export default function Dashboard({
   );
 
   return (
-    <div className="dashboard-container">
-      <div className="dashboard-header">
+    <div className="page-container dashboard-container">
+      <div className="hb-header-container">
         <div>
-          <h2 className="dashboard-title">{t("dashboard.title")}</h2>
-          <p className="dashboard-subtitle">
+          <h2 className="hb-header-title">{t("dashboard.title")}</h2>
+          <p className="hb-header-subtitle">
             Overview of your financial performance
           </p>
         </div>

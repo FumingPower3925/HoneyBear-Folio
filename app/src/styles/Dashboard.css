@@ -2,8 +2,9 @@
 @import "./theme.css";
 
 @layer components {
-  .dashboard-container {
-    @apply h-full flex flex-col space-y-8 max-w-7xl mx-auto pb-8;
+  /* Common page container - use this for all page layouts to ensure consistent margins */
+  .page-container {
+    @apply h-full flex flex-col space-y-8 max-w-full mx-auto pb-8;
   }
 
   .dashboard-header {
@@ -159,6 +160,7 @@
   .investment-dashboard-container .text-3xl,
   .rules-container .text-3xl,
   .dashboard-title,
+  .hb-header-title,
   .summary-card-value {
     font-size: calc(1.875rem * var(--hb-font-size)) !important;
   }
